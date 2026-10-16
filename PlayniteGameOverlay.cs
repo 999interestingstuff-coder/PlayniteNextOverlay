@@ -92,6 +92,13 @@ namespace PlayniteGameOverlay
                         return;
                     }
 
+                    // Audio panel has its own controls (needs releases too, for hold-to-repeat)
+                    if (overlayWindow.IsAudioPanelOpen)
+                    {
+                        overlayWindow.HandleAudioPanelInput(args.Button, args.State == ControllerInputState.Pressed);
+                        return;
+                    }
+
                     // ignore releases
                     if (mostRecentPress == null)
                         return;
@@ -234,8 +241,54 @@ namespace PlayniteGameOverlay
             window.AchievementListRequested += OnAchievementListRequested;
             window.AchievementListClosed += OnAchievementListClosed;
             window.OverlayHidden += OnOverlayHidden;
+            window.AudioPanelOpened += OnAudioPanelOpened;
+            AttachAudioSwitcher(window);
             window.ExtraGamePidsProvider = () => lastStartedProcessId > 0 ? new List<int> { lastStartedProcessId } : new List<int>();
         }
+
+        #region Audio Switcher integration
+
+        // Playnite NX Audio Switcher (Narian): https://github.com/Naerian/playnite-nx-audio-switcher
+        // The overlay's Audio panel binds to the plugin's public "Theme" object (the same API its fullscreen themes use)
+        // through reflection, so there is no compile-time dependency: without the plugin the Audio button is hidden.
+        private static readonly Guid AudioSwitcherPluginId = Guid.Parse("708b6ec4-bf96-4c0d-bd9d-fe0aa04d6bf1");
+        private Playnite.SDK.Plugins.Plugin audioSwitcherPlugin;
+
+        private void AttachAudioSwitcher(OverlayWindow window)
+        {
+            try
+            {
+                audioSwitcherPlugin = playniteAPI.Addons.Plugins.FirstOrDefault(p => p.Id == AudioSwitcherPluginId);
+                object theme = audioSwitcherPlugin?.GetType().GetProperty("Theme")?.GetValue(audioSwitcherPlugin, null);
+                window.ViewModel.AudioTheme = theme;
+                logger.Info(theme != null
+                    ? "Audio Switcher found; the overlay Audio panel is enabled."
+                    : "Audio Switcher not found (or without a theme API); the overlay Audio button is hidden.");
+            }
+            catch (Exception ex)
+            {
+                logger.Warn($"Could not connect to Audio Switcher: {ex.Message}");
+                window.ViewModel.AudioTheme = null;
+            }
+        }
+
+        private void OnAudioPanelOpened()
+        {
+            // Audio Switcher starts watching other apps' audio sessions only when a theme control needs them.
+            // The overlay's Media tab needs them too, so start it (internal method, hence reflection).
+            try
+            {
+                audioSwitcherPlugin?.GetType()
+                    .GetMethod("EnsureMediaSessionDiscoveryStarted", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)
+                    ?.Invoke(audioSwitcherPlugin, null);
+            }
+            catch (Exception ex)
+            {
+                logger.Warn($"Could not start Audio Switcher media session discovery: {ex.Message}");
+            }
+        }
+
+        #endregion
 
         // The game is paused for as long as the overlay is on screen, and resumed as soon as it is hidden.
         private void OnOverlayHidden()
@@ -470,6 +523,8 @@ namespace PlayniteGameOverlay
             {
                 if (overlayWindow.IsAchievementListOpen)
                     overlayWindow.CloseAchievementList();
+                else if (overlayWindow.IsAudioPanelOpen)
+                    overlayWindow.CloseAudioPanel();
                 else
                     overlayWindow.Hide();
             }

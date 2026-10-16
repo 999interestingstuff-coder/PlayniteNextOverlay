@@ -33,6 +33,19 @@ Secret descriptions stay hidden until the achievement is unlocked, or until you 
 
 If Playnite Achievements has no data for a game, the overlay falls back to SuccessStory when that extension is installed.
 
+## Audio panel
+
+If the [Audio Switcher](https://github.com/Naerian/playnite-nx-audio-switcher) extension is installed, an **Audio** button appears under Show Playnite. Without it the button is hidden.
+
+The panel has two tabs:
+
+- **System**: Windows volume, the running game's own volume, mute, and the output device list.
+- **Media**: a volume slider and mute button for each other app that is playing audio.
+
+Controls: D-pad or stick up and down to move, left and right to change the volume (or switch tabs when no slider is selected), A to select, LB and RB to switch tabs, B to go back. With a keyboard, use the arrow keys, Enter, and Esc or Backspace. The sliders also work with the mouse.
+
+The game is paused while the overlay is open (see below), so you will not hear volume changes until you return to the game.
+
 ## Settings
 
 Open Playnite, then Add-ons, then Extensions settings, then Playnite Next Overlay.

@@ -62,10 +62,17 @@ namespace PlayniteGameOverlay
             ViewModel.OpenAchievementListRequested += () => AchievementListRequested?.Invoke();
             ViewModel.CloseAchievementListRequested += CloseAchievementList;
             ViewModel.AchievementList.ItemsReplaced += OnAchievementItemsReplaced;
+            ViewModel.OpenAudioPanelRequested += OpenAudioPanel;
+            ViewModel.CloseAudioPanelRequested += CloseAudioPanel;
+            ViewModel.AudioTabChanged += FocusFirstAudioRow;
 
             // Hold-to-repeat for D-pad / stick scrolling in the achievement list
             listRepeatTimer = new DispatcherTimer(DispatcherPriority.Input);
             listRepeatTimer.Tick += ListRepeatTimer_Tick;
+
+            // Hold-to-repeat for the audio panel (move up/down, change volume)
+            audioRepeatTimer = new DispatcherTimer(DispatcherPriority.Input);
+            audioRepeatTimer.Tick += AudioRepeatTimer_Tick;
 
             // Set the window to fullscreen
             this.WindowState = WindowState.Maximized;
@@ -313,6 +320,7 @@ namespace PlayniteGameOverlay
         {
             // Close the achievement list first so the plugin resumes a suspended game
             CloseAchievementList();
+            CloseAudioPanel();
 
             // Stop timers
             PauseTimers();
@@ -330,6 +338,7 @@ namespace PlayniteGameOverlay
         {
             // Hiding the overlay always closes the achievement list
             CloseAchievementList();
+            CloseAudioPanel();
 
             Active = false;
             // Pause timers when hiding
@@ -351,6 +360,12 @@ namespace PlayniteGameOverlay
             if (ViewModel.IsAchievementListOpen)
             {
                 HandleAchievementListKey(e);
+                return;
+            }
+
+            if (ViewModel.IsAudioPanelOpen)
+            {
+                HandleAudioPanelKey(e);
                 return;
             }
 
@@ -706,6 +721,242 @@ namespace PlayniteGameOverlay
                     return;
             }
             e.Handled = true;
+        }
+
+        #endregion
+
+        #region Audio panel (Audio Switcher integration)
+
+        // Raised when the panel opens, so the plugin can make sure Audio Switcher's media session discovery is running
+        public event Action AudioPanelOpened;
+
+        private readonly DispatcherTimer audioRepeatTimer;
+        private Action heldAudioAction;
+        private ControllerInput? heldAudioButton;
+
+        private const int AudioRepeatInitialDelayMs = 350;
+        private const int AudioRepeatIntervalMs = 90;
+        private const int AudioVolumeStep = 2;
+
+        public bool IsAudioPanelOpen => ViewModel.IsAudioPanelOpen;
+
+        private System.Windows.Input.ICommand GetAudioCommand(string name)
+        {
+            try
+            {
+                var theme = ViewModel.AudioTheme;
+                if (theme == null) return null;
+                return theme.GetType().GetProperty(name)?.GetValue(theme, null) as System.Windows.Input.ICommand;
+            }
+            catch (Exception ex)
+            {
+                _logger.Log($"Audio command '{name}' not available: {ex.Message}", "AUDIO");
+                return null;
+            }
+        }
+
+        private void RunAudioCommand(string name)
+        {
+            try
+            {
+                var cmd = GetAudioCommand(name);
+                if (cmd != null && cmd.CanExecute(null))
+                    cmd.Execute(null);
+            }
+            catch (Exception ex)
+            {
+                _logger.Log($"Audio command '{name}' failed: {ex.Message}", "AUDIO");
+            }
+        }
+
+        /// <summary>Opens the audio panel on top of the main overlay. Safe to call at any time.</summary>
+        public void OpenAudioPanel()
+        {
+            Dispatcher.Invoke(() =>
+            {
+                if (!ViewModel.HasAudioSwitcher || ViewModel.IsAudioPanelOpen || ViewModel.IsAchievementListOpen)
+                    return;
+
+                StopAudioRepeat();
+                ViewModel.IsAudioMediaTab = false;
+
+                // Bring Audio Switcher's values up to date (volume may have been changed outside the overlay)
+                RunAudioCommand("RefreshDevicesCommand");
+                RunAudioCommand("RefreshVolumeCommand");
+                RunAudioCommand("RefreshGameVolumeCommand");
+                try { AudioPanelOpened?.Invoke(); }
+                catch (Exception ex) { _logger.Log($"AudioPanelOpened handler failed: {ex.Message}", "AUDIO"); }
+                RunAudioCommand("RefreshMediaSessionsCommand");
+
+                ViewModel.IsAudioPanelOpen = true;
+                FocusFirstAudioRow();
+                _logger.Log("Audio panel opened", "AUDIO");
+            });
+        }
+
+        /// <summary>Closes the audio panel and returns to the main overlay. Safe to call at any time.</summary>
+        public void CloseAudioPanel()
+        {
+            Dispatcher.Invoke(() =>
+            {
+                StopAudioRepeat();
+                if (!ViewModel.IsAudioPanelOpen)
+                    return;
+
+                ViewModel.IsAudioPanelOpen = false;
+                if (IsVisible)
+                {
+                    if (AudioButton.IsVisible) AudioButton.Focus();
+                    else ReturnToGameButton.Focus();
+                }
+                _logger.Log("Audio panel closed", "AUDIO");
+            });
+        }
+
+        private void FocusFirstAudioRow()
+        {
+            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+            {
+                if (!ViewModel.IsAudioPanelOpen) return;
+                var host = ViewModel.IsAudioMediaTab ? (UIElement)AudioMediaContent : AudioSystemContent;
+                host.MoveFocus(new TraversalRequest(FocusNavigationDirection.First));
+                ScrollFocusedAudioRowIntoView();
+            }));
+        }
+
+        private void ScrollFocusedAudioRowIntoView()
+        {
+            (Keyboard.FocusedElement as FrameworkElement)?.BringIntoView();
+        }
+
+        /// <summary>Moves focus to the next (+1) or previous (-1) row in the panel.</summary>
+        private void MoveAudioFocus(int direction)
+        {
+            var focused = Keyboard.FocusedElement as UIElement;
+            if (focused == null || !AudioPanelLayer.IsAncestorOf(focused))
+            {
+                FocusFirstAudioRow();
+                return;
+            }
+            focused.MoveFocus(new TraversalRequest(direction > 0 ? FocusNavigationDirection.Next : FocusNavigationDirection.Previous));
+            ScrollFocusedAudioRowIntoView();
+        }
+
+        /// <summary>Left/right: changes the volume when a slider is focused, otherwise switches between the System and Media tabs.</summary>
+        private void AudioHorizontal(int direction)
+        {
+            var slider = Keyboard.FocusedElement as System.Windows.Controls.Slider;
+            if (slider != null && AudioPanelLayer.IsAncestorOf(slider))
+            {
+                slider.Value = Math.Max(slider.Minimum, Math.Min(slider.Maximum, slider.Value + direction * AudioVolumeStep));
+                return;
+            }
+            ViewModel.IsAudioMediaTab = direction > 0;
+        }
+
+        private void HandleAudioPanelKey(System.Windows.Input.KeyEventArgs e)
+        {
+            switch (e.Key)
+            {
+                case Key.Up: MoveAudioFocus(-1); break;
+                case Key.Down: MoveAudioFocus(1); break;
+                case Key.Left: AudioHorizontal(-1); break;
+                case Key.Right: AudioHorizontal(1); break;
+                case Key.PageUp: ViewModel.IsAudioMediaTab = false; break;
+                case Key.PageDown: ViewModel.IsAudioMediaTab = true; break;
+                case Key.Back:
+                case Key.Escape:   // normally already handled by the global hook in the plugin
+                    CloseAudioPanel();
+                    break;
+                default:
+                    return;   // Enter / Space on a focused button work as usual
+            }
+            e.Handled = true;
+        }
+
+        /// <summary>
+        /// Controller input while the audio panel is open. Called for presses AND releases (releases stop hold-to-repeat).
+        /// D-pad/left stick up-down: move; left-right: change volume (or switch tab); A: select; LB/RB: tabs; B: back.
+        /// </summary>
+        public void HandleAudioPanelInput(ControllerInput button, bool pressed)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                if (!ViewModel.IsAudioPanelOpen)
+                    return;
+
+                Action action = null;
+                switch (button)
+                {
+                    case ControllerInput.DPadUp:
+                    case ControllerInput.LeftStickUp:
+                        action = () => MoveAudioFocus(-1); break;
+                    case ControllerInput.DPadDown:
+                    case ControllerInput.LeftStickDown:
+                        action = () => MoveAudioFocus(1); break;
+                    case ControllerInput.DPadLeft:
+                    case ControllerInput.LeftStickLeft:
+                        action = () => AudioHorizontal(-1); break;
+                    case ControllerInput.DPadRight:
+                    case ControllerInput.LeftStickRight:
+                        action = () => AudioHorizontal(1); break;
+                }
+
+                if (action != null)
+                {
+                    if (pressed)
+                    {
+                        action();
+                        heldAudioAction = action;
+                        heldAudioButton = button;
+                        audioRepeatTimer.Interval = TimeSpan.FromMilliseconds(AudioRepeatInitialDelayMs);
+                        audioRepeatTimer.Start();
+                    }
+                    else if (heldAudioButton == button)
+                    {
+                        StopAudioRepeat();
+                    }
+                    return;
+                }
+
+                if (!pressed)
+                    return;
+
+                switch (button)
+                {
+                    case ControllerInput.A:
+                        ClickFocusedElement();
+                        break;
+                    case ControllerInput.B:
+                        _logger.Log("B pressed - closing audio panel", "AUDIO");
+                        CloseAudioPanel();
+                        break;
+                    case ControllerInput.LeftShoulder:
+                        ViewModel.IsAudioMediaTab = false;
+                        break;
+                    case ControllerInput.RightShoulder:
+                        ViewModel.IsAudioMediaTab = true;
+                        break;
+                }
+            });
+        }
+
+        private void AudioRepeatTimer_Tick(object sender, EventArgs e)
+        {
+            if (!ViewModel.IsAudioPanelOpen || heldAudioAction == null)
+            {
+                StopAudioRepeat();
+                return;
+            }
+            audioRepeatTimer.Interval = TimeSpan.FromMilliseconds(AudioRepeatIntervalMs);
+            heldAudioAction();
+        }
+
+        private void StopAudioRepeat()
+        {
+            heldAudioAction = null;
+            heldAudioButton = null;
+            audioRepeatTimer?.Stop();
         }
 
         #endregion

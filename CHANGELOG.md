@@ -5,6 +5,7 @@
 - The game is now paused for as long as the overlay is open, not only while the achievement list is.
 - Exit Game now kills the game process tree immediately instead of waiting for a graceful close.
 - Recent-achievement panel has a minimum height so it is no longer cut off.
+- New Audio button under Show Playnite, with an in-overlay Audio panel (Windows volume, game volume, mute, output device, and a Media tab for other apps). It needs the Audio Switcher extension; without it the button is hidden.
 
 ## 1.0.0 - 2026-10-09
 

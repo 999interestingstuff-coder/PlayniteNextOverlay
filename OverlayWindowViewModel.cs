@@ -209,8 +209,57 @@ namespace PlayniteGameOverlay
             }
         }
 
-        /// <summary>The main overlay (buttons etc.) is disabled - and therefore not focusable - while the list is open.</summary>
-        public bool IsMainLayerEnabled => !_isAchievementListOpen;
+        /// <summary>The main overlay (buttons etc.) is disabled - and therefore not focusable - while the list or the audio panel is open.</summary>
+        public bool IsMainLayerEnabled => !_isAchievementListOpen && !_isAudioPanelOpen;
+
+        // ---- Audio panel (Audio Switcher integration) ----
+        private bool _isAudioPanelOpen;
+        private bool _isAudioMediaTab;
+        private object _audioTheme;
+
+        /// <summary>
+        /// The Audio Switcher plugin's theme API object (volume, game volume, mute, output devices, media sessions),
+        /// or null when Audio Switcher is not installed. The panel binds to it directly, so it stays in sync with the plugin.
+        /// </summary>
+        public object AudioTheme
+        {
+            get => _audioTheme;
+            set
+            {
+                _audioTheme = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(HasAudioSwitcher));
+            }
+        }
+
+        public bool HasAudioSwitcher => _audioTheme != null;
+
+        public bool IsAudioPanelOpen
+        {
+            get => _isAudioPanelOpen;
+            set
+            {
+                _isAudioPanelOpen = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IsMainLayerEnabled));
+            }
+        }
+
+        /// <summary>True when the Media tab is selected, false for the System tab.</summary>
+        public bool IsAudioMediaTab
+        {
+            get => _isAudioMediaTab;
+            set
+            {
+                if (_isAudioMediaTab == value) return;
+                _isAudioMediaTab = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IsAudioSystemTab));
+                AudioTabChanged?.Invoke();
+            }
+        }
+
+        public bool IsAudioSystemTab => !_isAudioMediaTab;
 
         /// <summary>"Game paused" / "Game not paused (...)" shown in the list footer; null hides it.</summary>
         public string GamePauseStatus
@@ -316,6 +365,9 @@ namespace PlayniteGameOverlay
         public ICommand ShortcutButtonCommand { get; }
         public ICommand OpenAchievementListCommand { get; }
         public ICommand CloseAchievementListCommand { get; }
+        public ICommand OpenAudioPanelCommand { get; }
+        public ICommand CloseAudioPanelCommand { get; }
+        public ICommand SetAudioTabCommand { get; }
 
         // Event for showing Playnite
         public event Action<bool> ShowPlayniteRequested;
@@ -324,6 +376,9 @@ namespace PlayniteGameOverlay
         public event Action<ShortcutButtonViewModel> ExecuteShortcutRequested;
         public event Action OpenAchievementListRequested;
         public event Action CloseAchievementListRequested;
+        public event Action OpenAudioPanelRequested;
+        public event Action CloseAudioPanelRequested;
+        public event Action AudioTabChanged;
 
         // Constructor with design-time data support
         public OverlayWindowViewModel(bool designMode = false)
@@ -341,6 +396,13 @@ namespace PlayniteGameOverlay
                     OpenAchievementListRequested?.Invoke();
             });
             CloseAchievementListCommand = new RelayCommand(_ => CloseAchievementListRequested?.Invoke());
+            OpenAudioPanelCommand = new RelayCommand(_ =>
+            {
+                if (HasAudioSwitcher && !IsAudioPanelOpen && !IsAchievementListOpen)
+                    OpenAudioPanelRequested?.Invoke();
+            });
+            CloseAudioPanelCommand = new RelayCommand(_ => CloseAudioPanelRequested?.Invoke());
+            SetAudioTabCommand = new RelayCommand(p => IsAudioMediaTab = string.Equals(p as string, "Media", StringComparison.OrdinalIgnoreCase));
 
             if (designMode || System.ComponentModel.DesignerProperties.GetIsInDesignMode(new DependencyObject()))
             {
