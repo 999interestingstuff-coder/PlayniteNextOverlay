@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
@@ -44,51 +45,84 @@ namespace PlayniteGameOverlay
             }
         }
 
-        public async void CloseGame(GameOverlayData gameData, CloseBehavior behavior = CloseBehavior.CloseAndEnd)
+        /// <summary>
+        /// Closes the game. CloseAndEnd and EndTask kill the whole process tree at once, with no
+        /// graceful-close wait, so games that are slow to shut down end immediately.
+        /// CloseWindow only asks the main window to close (falls back to Kill if that fails).
+        /// <paramref name="extraPids"/> are additional roots to kill (for example the process Playnite started).
+        /// </summary>
+        public void CloseGame(GameOverlayData gameData, CloseBehavior behavior = CloseBehavior.CloseAndEnd, IEnumerable<int> extraPids = null)
         {
-            if (gameData != null)
+            if (gameData == null)
+                return;
+
+            var roots = new List<int>();
+            if (gameData.ProcessId > 0)
+                roots.Add(gameData.ProcessId);
+            if (extraPids != null)
+                roots.AddRange(extraPids.Where(p => p > 0));
+            roots = roots.Distinct().ToList();
+
+            switch (behavior)
             {
-                var proc = FindProcessById(gameData.ProcessId);
-                if (proc == null)
-                {
-                    return;
-                }
+                case CloseBehavior.CloseWindow:
+                    var proc = FindProcessById(gameData.ProcessId);
+                    if (proc == null)
+                        return;
+                    if (!proc.CloseMainWindow())
+                        KillProcessTree(proc.Id);
+                    proc.Close();
+                    break;
+                case CloseBehavior.CloseAndEnd:
+                case CloseBehavior.EndTask:
+                    foreach (var pid in roots)
+                        KillProcessTree(pid);
+                    break;
+                default:
+                    _logger.Log($"Unknown close behavior: {behavior}", "ERROR");
+                    break;
+            }
+        }
 
-                var success = proc.CloseMainWindow();
-                switch (behavior)
-                {
-                    case CloseBehavior.CloseAndEnd:
-                        if (!success)
-                        {
-                            proc.Kill(); // Forcefully kill the process if closing the main window fails
-                        }
-                        for (int i = 0; i < 30 && !proc.HasExited; i++)
-                        {
-                            await Task.Delay(100); // Wait for up to 3 seconds for the process to exit gracefully
-                        }
-                        if (!proc.HasExited)
-                        {
-                            _logger.Log($"Process {proc.ProcessName} did not exit gracefully after 3 seconds, killing it forcefully.", "WARNING");
-                            proc.Kill(); // Forcefully kill the process if it hasn't exited
-                        }
-                        proc.Close();
-                        break;
-                    case CloseBehavior.CloseWindow:
-                        if (!success)
-                        {
-                            proc.Kill(); // Forcefully kill the process if closing the main window fails
-                        }
-                        proc.Close();
-                        break;
-                    case CloseBehavior.EndTask:
-                        proc.Kill(); // Forcefully kill the process regardless
-                        proc.Close();
-                        break;
-                    default:
-                        _logger.Log($"Unknown close behavior: {behavior}", "ERROR");
-                        break;
-                }
+        /// <summary>Force-kills a process and all of its children (taskkill /F /T), falling back to Process.Kill.</summary>
+        private void KillProcessTree(int pid)
+        {
+            if (pid <= 0 || !GameProcessSuspender.IsAlive(pid))
+                return;
 
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = "taskkill",
+                    Arguments = $"/F /T /PID {pid}",
+                    CreateNoWindow = true,
+                    UseShellExecute = false,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                };
+                using (var killer = Process.Start(psi))
+                {
+                    // taskkill returns almost instantly; do not block the UI for long if it hangs
+                    if (killer != null && !killer.WaitForExit(2000))
+                        _logger.Log($"taskkill for PID {pid} is taking long; continuing.", "WARNING");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Log($"taskkill failed for PID {pid} ({ex.Message}); using Process.Kill.", "WARNING");
+            }
+
+            if (GameProcessSuspender.IsAlive(pid))
+            {
+                try
+                {
+                    using (var p = Process.GetProcessById(pid))
+                        p.Kill();
+                }
+                catch (Exception ex)
+                {
+                    _logger.Log($"Could not kill PID {pid}: {ex.Message}", "ERROR");
+                }
             }
         }
 

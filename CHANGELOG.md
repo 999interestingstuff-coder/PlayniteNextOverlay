@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- The game is now paused for as long as the overlay is open, not only while the achievement list is.
+- Exit Game now kills the game process tree immediately instead of waiting for a graceful close.
+- Recent-achievement panel has a minimum height so it is no longer cut off.
+
 ## 1.0.0 - 2026-10-09
 
 First public release of Playnite Next Overlay, a fork of Playnite Game Overlay 0.4.5.

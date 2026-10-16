@@ -80,7 +80,7 @@ Stream starts empty, so its button stays hidden until you give it a shortcut. To
 
 ## Pausing the game
 
-"Pause the game while the achievement list is open" is on by default.
+"Pause the game while the overlay is open" is on by default. The game is paused as soon as the overlay appears and resumes when it closes.
 
 While the list is open, the extension suspends the game's process. It resumes the game when you go back, hide the overlay, the game exits, Playnite closes, or the extension is unloaded.
 

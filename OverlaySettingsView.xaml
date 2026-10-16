@@ -102,9 +102,9 @@
 
             <TextBlock Text="Overlay views" FontSize="18" />
             <CheckBox IsChecked="{Binding SuspendGameInOverlayViews}" 
-                  Content="Pause the game while the achievement list is open" 
+                  Content="Pause the game while the overlay is open" 
                   Margin="0,10,0,5"/>
-            <TextBlock Text="Pauses the running game while the full achievement list is open, and resumes it when you return to the main overlay, hide the overlay, quit the game, or close Playnite. Open the list by clicking the recent-achievement panel, or by selecting it and pressing A. Turn this off if a game misbehaves after being paused, for example if the audio glitches." 
+            <TextBlock Text="Pauses the running game for as long as the overlay is open (including the full achievement list), and resumes it when you hide the overlay, quit the game, or close Playnite. Open the list by clicking the recent-achievement panel, or by selecting it and pressing A. Turn this off if a game misbehaves after being paused, for example if the audio glitches." 
                    TextWrapping="Wrap"
                    Margin="0,0,0,20"
                    Foreground="#888888"/>

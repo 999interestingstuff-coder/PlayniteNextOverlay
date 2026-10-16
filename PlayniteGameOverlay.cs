@@ -233,6 +233,16 @@ namespace PlayniteGameOverlay
             window.OnShowPlayniteRequested += ShowPlaynite;
             window.AchievementListRequested += OnAchievementListRequested;
             window.AchievementListClosed += OnAchievementListClosed;
+            window.OverlayHidden += OnOverlayHidden;
+            window.ExtraGamePidsProvider = () => lastStartedProcessId > 0 ? new List<int> { lastStartedProcessId } : new List<int>();
+        }
+
+        // The game is paused for as long as the overlay is on screen, and resumed as soon as it is hidden.
+        private void OnOverlayHidden()
+        {
+            gamePauseStatus = null;
+            suspender.ResumeAll("overlay hidden");
+            suspendWatchdog?.Stop();
         }
 
         public override void OnApplicationStopped(OnApplicationStoppedEventArgs args)
@@ -282,35 +292,32 @@ namespace PlayniteGameOverlay
 
             overlayWindow.OpenAchievementList(game.Name, achievements);
 
-            if (Settings.SuspendGameInOverlayViews)
-            {
-                overlayWindow.SetGamePauseStatus("Pausing game...");
-                // Let the list render first, then freeze the game.
-                System.Windows.Application.Current.Dispatcher.BeginInvoke(
-                    System.Windows.Threading.DispatcherPriority.Background,
-                    new Action(() => SuspendGameForOverlayView(game)));
-            }
-            else
-            {
-                overlayWindow.SetGamePauseStatus(null);
-                logger.Info("Game pause for overlay views is disabled in settings; game keeps running.");
-            }
+            // The game is already paused (or not) from when the overlay opened; just show that state in the list footer.
+            overlayWindow.SetGamePauseStatus(Settings.SuspendGameInOverlayViews ? gamePauseStatus : null);
         }
 
         private void OnAchievementListClosed()
         {
-            suspender.ResumeAll("achievement list closed");
-            suspendWatchdog?.Stop();
+            // Going back from the list to the main overlay keeps the game paused; it resumes when the overlay hides.
+        }
+
+        // Text shown in the achievement list footer ("Game paused" etc.); null when the game is not being paused.
+        private string gamePauseStatus;
+
+        private void SetPauseStatus(string status)
+        {
+            gamePauseStatus = status;
+            overlayWindow?.SetGamePauseStatus(status);
         }
 
         private void SuspendGameForOverlayView(Game game)
         {
             try
             {
-                // The view may already have been closed again before this deferred call ran.
-                if (overlayWindow == null || !overlayWindow.IsVisible || !overlayWindow.IsAchievementListOpen)
+                // The overlay may already have been hidden again before this deferred call ran.
+                if (overlayWindow == null || !overlayWindow.IsVisible)
                 {
-                    logger.Info("[Overlay suspend] View closed before the game could be paused; nothing to do.");
+                    logger.Info("[Overlay suspend] Overlay hidden before the game could be paused; nothing to do.");
                     return;
                 }
 
@@ -319,27 +326,27 @@ namespace PlayniteGameOverlay
                 if (pids.Count == 0)
                 {
                     logger.Warn($"[Overlay suspend] No game process found for {game.Name}; the game keeps running.");
-                    overlayWindow.SetGamePauseStatus("Game not paused (process not found)");
+                    SetPauseStatus("Game not paused (process not found)");
                     return;
                 }
 
                 logger.Info($"[Overlay suspend] Pausing {game.Name}: candidate PIDs {string.Join(", ", pids)} (source: {source})");
-                int n = suspender.Suspend(pids, $"achievement list open ({source})", playniteAPI.Paths.ApplicationPath);
+                int n = suspender.Suspend(pids, $"overlay open ({source})", playniteAPI.Paths.ApplicationPath);
                 if (n > 0)
                 {
-                    overlayWindow.SetGamePauseStatus("Game paused");
+                    SetPauseStatus("Game paused");
                     StartSuspendWatchdog();
                 }
                 else
                 {
-                    overlayWindow.SetGamePauseStatus("Game not paused (see log)");
+                    SetPauseStatus("Game not paused (see log)");
                 }
             }
             catch (Exception ex)
             {
                 logger.Error($"[Overlay suspend] Unexpected error while pausing the game: {ex}");
                 suspender.ResumeAll("error while suspending");
-                overlayWindow?.SetGamePauseStatus("Game not paused (error)");
+                SetPauseStatus("Game not paused (error)");
             }
         }
 
@@ -410,9 +417,9 @@ namespace PlayniteGameOverlay
                         suspendWatchdog.Stop();
                         return;
                     }
-                    if (overlayWindow == null || !overlayWindow.IsVisible || !overlayWindow.IsAchievementListOpen)
+                    if (overlayWindow == null || !overlayWindow.IsVisible)
                     {
-                        suspender.ResumeAll("watchdog: overlay view no longer open");
+                        suspender.ResumeAll("watchdog: overlay no longer open");
                         suspendWatchdog.Stop();
                     }
                 };
@@ -507,7 +514,20 @@ namespace PlayniteGameOverlay
             overlayGameProcessId = FindRunningGameProcess(game, null)?.Id ?? -1;
             var gameOverlayData = CreateGameOverlayData(game, overlayGameProcessId > 0 ? overlayGameProcessId : (int?)null, gameStarted);
             overlayWindow.UpdateGameOverlay(gameOverlayData);
+            gamePauseStatus = null;
             overlayWindow.ShowOverlay();
+
+            // Pause the game fully while the overlay is open (not only while the achievement list is). Let the overlay render first.
+            if (Settings.SuspendGameInOverlayViews && game != null)
+            {
+                System.Windows.Application.Current.Dispatcher.BeginInvoke(
+                    System.Windows.Threading.DispatcherPriority.Background,
+                    new Action(() => SuspendGameForOverlayView(game)));
+            }
+            else
+            {
+                logger.Info("Game pause while the overlay is open is disabled in settings; game keeps running.");
+            }
         }
 
         private GameOverlayData CreateGameOverlayData(Game game, int? processId, DateTime StartTime)

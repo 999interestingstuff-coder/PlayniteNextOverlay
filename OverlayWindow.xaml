@@ -349,15 +349,17 @@
                     Visibility="{Binding HasAchievements, Converter={StaticResource BoolToVis}}"/>
             <!-- 0.4.5.3: the panel is a Button so it is clickable (mouse/touchpad), takes part in the controller/keyboard
                  focus navigation like the other overlay buttons and is activated with A / Enter / Space. -->
-            <Button x:Name="AchievementPanel" 
-                    Width="377" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="40,510,0,0"
+            <Button x:Name="AchievementPanel"
+                    Width="377" MinHeight="104" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="40,510,0,0"
+                    HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center" ClipToBounds="False"
+                    UseLayoutRounding="True" SnapsToDevicePixels="True"
                     Visibility="{Binding HasAchievements, Converter={StaticResource BoolToVis}}"
                     Command="{Binding OpenAchievementListCommand}" Cursor="Hand" FocusVisualStyle="{x:Null}">
                 <Button.Template>
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="PanelBorder" Background="#FF242424" CornerRadius="10" Padding="20,16,20,16"
-                                BorderBrush="#80808080" BorderThickness="1,1,1,1">
-                            <ContentPresenter/>
+                                BorderBrush="#80808080" BorderThickness="1,1,1,1" ClipToBounds="False">
+                            <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
@@ -385,7 +387,7 @@
                     </Border>
 
                     <!-- Achievement Info -->
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" ClipToBounds="False">
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                             <Path Fill="#D0808080" Height="11" Width="12" Stretch="Uniform" Data="M0 0.75c0-0.414 0.336-0.75 0.75-0.75h2.885c0.019 0 0.037 0.001 0.056 0.002h6.621c0.018-0.001 0.036-0.002 0.054-0.002H13.25c0.414 0 0.75 0.336 0.75 0.75V3.635c0 1.859-1.396 3.392-3.197 3.609-0.447 1.369-1.614 2.413-3.053 2.686V12.5h2.615c0.414 0 0.75 0.336 0.75 0.75s-0.336 0.75-0.75 0.75H7.026c-0.009 0-0.017 0-0.026 0s-0.017 0-0.026 0H3.635c-0.414 0-0.75-0.336-0.75-0.75s0.336-0.75 0.75-0.75H6.25V9.93c-1.439-0.273-2.605-1.317-3.053-2.686C1.396 7.027 0 5.494 0 3.635V0.75ZM2.885 5.634V1.5H1.5v2.135c0 0.915 0.576 1.696 1.385 1.999ZM11.115 1.5v4.134c0.809-0.304 1.385-1.084 1.385-1.999V1.5h-1.385Z" Margin="0,0,5,-1"/>
                             <TextBlock x:Name="LastAchievementLabel" Text="RECENT ACHIEVEMENT" FontSize="11" Foreground="#80808080"/>
@@ -397,8 +399,8 @@
                                    Foreground="White" FontWeight="Bold" FontSize="16" TextTrimming="CharacterEllipsis"/>
 
                         <TextBlock x:Name="LastAchievementDescription" Text="{Binding LastAchievement.Description}" 
-                                   Foreground="#FFD0D0D0" FontSize="12" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" 
-                                   MaxHeight="36"/>
+                                   Foreground="#FFD0D0D0" FontSize="12" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                                   MaxHeight="34" Margin="0,2,0,0"/>
                     </StackPanel>
 
                     <!-- "View all" hint -->

@@ -146,9 +146,16 @@ namespace PlayniteGameOverlay
             });
         }
 
+        /// <summary>Extra process ids the plugin knows belong to the game (for example the process Playnite started); killed together with the detected game process.</summary>
+        public Func<System.Collections.Generic.IEnumerable<int>> ExtraGamePidsProvider { get; set; }
+
         private void CloseGame()
         {
-            _gameStateManager.CloseGame(CreateGameOverlayDataFromViewModel());
+            System.Collections.Generic.IEnumerable<int> extra = null;
+            try { extra = ExtraGamePidsProvider?.Invoke(); }
+            catch (Exception ex) { _logger.Log($"Could not get extra game PIDs: {ex.Message}", "WARNING"); }
+
+            _gameStateManager.CloseGame(CreateGameOverlayDataFromViewModel(), CloseBehavior.CloseAndEnd, extra);
             this.Hide();
         }
 
@@ -310,12 +317,18 @@ namespace PlayniteGameOverlay
             // Stop timers
             PauseTimers();
 
+            // The overlay is gone: make sure a paused game is resumed
+            OverlayHidden?.Invoke();
+
             base.OnClosed(e);
         }
 
+        /// <summary>Raised whenever the overlay is hidden or closed, whatever the reason (the plugin resumes a paused game).</summary>
+        public event Action OverlayHidden;
+
         public new void Hide()
         {
-            // Hiding the overlay always closes the achievement list (-> game is resumed)
+            // Hiding the overlay always closes the achievement list
             CloseAchievementList();
 
             Active = false;
@@ -327,6 +340,9 @@ namespace PlayniteGameOverlay
             {
                 base.Hide();
             });
+
+            // Resume the game last, after the overlay is gone
+            OverlayHidden?.Invoke();
         }
 
         // Navigation methods for the OverlayWindow class
