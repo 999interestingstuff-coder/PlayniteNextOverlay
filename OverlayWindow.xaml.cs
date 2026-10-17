@@ -45,6 +45,11 @@ namespace PlayniteGameOverlay
             ViewModel = new OverlayWindowViewModel();
             this.DataContext = ViewModel;
 
+            // Screenshot gallery layer: added last, so it sits on top of the other layers
+            ScreenshotGalleryLayer = new ScreenshotGalleryView();
+            ScreenshotGalleryLayer.SetBinding(FrameworkElement.DataContextProperty, new System.Windows.Data.Binding("ScreenshotGallery"));
+            OverlayRoot.Children.Add(ScreenshotGalleryLayer);
+
             // Connect ViewModel events to handlers
             ViewModel.HideOverlayRequested += () => {
                 FocusGameWindow();
@@ -1074,6 +1079,7 @@ namespace PlayniteGameOverlay
         /// </summary>
         public bool ScreenshotGalleryEnabled { get; set; }
 
+        private readonly ScreenshotGalleryView ScreenshotGalleryLayer;
         private readonly DispatcherTimer galleryRepeatTimer;
         private ControllerInput? heldGalleryButton;
         private int heldGalleryStep;

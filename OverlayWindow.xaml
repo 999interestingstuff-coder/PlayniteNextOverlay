@@ -237,7 +237,7 @@
 
     <Viewbox Stretch="Uniform">
         <!-- Set a container with fixed aspect ratio -->
-        <Grid Width="1600" Height="900">
+        <Grid x:Name="OverlayRoot" Width="1600" Height="900">
             <!-- Main overlay layer (0.4.5.3: wrapped so it can be disabled = not focusable while the achievement list is open;
                  children intentionally not re-indented to keep the diff small) -->
             <Grid x:Name="MainLayer" IsEnabled="{Binding IsMainLayerEnabled}">
@@ -1211,8 +1211,9 @@
                 </Border>
             </Grid>
 
-            <!-- ===== Screenshot gallery layer: Screenshots Visualizer captures, shown on top of everything else ===== -->
-            <local:ScreenshotGalleryView x:Name="ScreenshotGalleryLayer" DataContext="{Binding ScreenshotGallery}"/>
+            <!-- The screenshot gallery layer (Screenshots Visualizer) is added on top of everything else from code, see
+                 OverlayWindow.xaml.cs. It is not declared here because the plugin class has the same name as the namespace,
+                 which breaks the generated field for a named custom control. -->
         </Grid>
     </Viewbox>
 </Window>
