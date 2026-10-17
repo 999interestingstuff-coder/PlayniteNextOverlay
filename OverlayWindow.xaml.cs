@@ -65,6 +65,13 @@ namespace PlayniteGameOverlay
             ViewModel.OpenAudioPanelRequested += OpenAudioPanel;
             ViewModel.CloseAudioPanelRequested += CloseAudioPanel;
             ViewModel.AudioTabChanged += FocusFirstAudioRow;
+            ViewModel.ScreenshotGallery.CloseRequested += CloseScreenshotGallery;
+            ViewModel.ScreenshotGallery.RefreshRequested += () => ScreenshotGalleryRefreshRequested?.Invoke();
+            ViewModel.ScreenshotGallery.OpenFolderRequested += OpenScreenshotFolder;
+
+            // Hold-to-repeat for D-pad / stick moves in the screenshot gallery
+            galleryRepeatTimer = new DispatcherTimer(DispatcherPriority.Input);
+            galleryRepeatTimer.Tick += GalleryRepeatTimer_Tick;
 
             // Hold-to-repeat for D-pad / stick scrolling in the achievement list
             listRepeatTimer = new DispatcherTimer(DispatcherPriority.Input);
@@ -202,6 +209,12 @@ namespace PlayniteGameOverlay
                 switch (btn.Type)
                 {
                     case ShortcutType.Gallery:
+                        if (ScreenshotGalleryEnabled)
+                        {
+                            // Screenshots Visualizer is installed: browse the captures inside the overlay
+                            ScreenshotGalleryRequested?.Invoke();
+                            return;
+                        }
                         ButtonActions.OpenCapturesFolder(btn.ShortcutCommand);
                         break;
                     case ShortcutType.Browser:
@@ -321,6 +334,7 @@ namespace PlayniteGameOverlay
             // Close the achievement list first so the plugin resumes a suspended game
             CloseAchievementList();
             CloseAudioPanel();
+            CloseScreenshotGallery();
 
             // Stop timers
             PauseTimers();
@@ -339,6 +353,7 @@ namespace PlayniteGameOverlay
             // Hiding the overlay always closes the achievement list
             CloseAchievementList();
             CloseAudioPanel();
+            CloseScreenshotGallery();
 
             Active = false;
             // Pause timers when hiding
@@ -361,6 +376,13 @@ namespace PlayniteGameOverlay
             {
                 if (IsKeyTwinOfPadInput(e)) return;
                 HandleAchievementListKey(e);
+                return;
+            }
+
+            if (ViewModel.ScreenshotGallery.IsOpen)
+            {
+                if (IsKeyTwinOfPadInput(e)) return;
+                HandleScreenshotGalleryKey(e);
                 return;
             }
 
@@ -511,7 +533,7 @@ namespace PlayniteGameOverlay
         private bool PadInputRecent()
         {
             return inputClock.ElapsedMilliseconds - lastPadInputMs < DuplicateInputWindowMs
-                   || heldListButton != null || heldAudioButton != null;
+                   || heldListButton != null || heldAudioButton != null || heldGalleryButton != null;
         }
 
         private bool KeyInputRecent()
@@ -616,7 +638,11 @@ namespace PlayniteGameOverlay
 
         public void SetGamePauseStatus(string status)
         {
-            Dispatcher.Invoke(() => ViewModel.GamePauseStatus = ViewModel.IsAchievementListOpen ? status : null);
+            Dispatcher.Invoke(() =>
+            {
+                ViewModel.GamePauseStatus = ViewModel.IsAchievementListOpen ? status : null;
+                ViewModel.ScreenshotGallery.GamePauseStatus = ViewModel.ScreenshotGallery.IsOpen ? status : null;
+            });
         }
 
         /// <summary>
@@ -1031,6 +1057,372 @@ namespace PlayniteGameOverlay
             heldAudioAction = null;
             heldAudioButton = null;
             audioRepeatTimer?.Stop();
+        }
+
+        #endregion
+
+        #region Screenshot gallery (Screenshots Visualizer integration)
+
+        // Raised when the Captures button is activated (the plugin picks the game and starts the scan)
+        public event Action ScreenshotGalleryRequested;
+        // Raised when the user asks for a rescan (Y / R / Rescan button)
+        public event Action ScreenshotGalleryRefreshRequested;
+
+        /// <summary>
+        /// Set by the plugin: true when Screenshots Visualizer is installed. The Captures button then opens the gallery;
+        /// otherwise it opens the captures folder as before.
+        /// </summary>
+        public bool ScreenshotGalleryEnabled { get; set; }
+
+        private readonly DispatcherTimer galleryRepeatTimer;
+        private ControllerInput? heldGalleryButton;
+        private int heldGalleryStep;
+        private UIElement galleryReturnFocus;
+        private long lastGalleryBackMs = -100000;
+        private long lastGalleryViewerKeyMs = -100000;
+
+        private const int GalleryViewerRepeatIntervalMs = 250;   // full-size images are decoded per step, so repeat slower than the grid
+        private const int GalleryBackGuardMs = 250;
+        private const int GalleryViewerKeyRepeatMs = 200;
+
+        public bool IsScreenshotGalleryOpen => ViewModel.ScreenshotGallery.IsOpen;
+
+        /// <summary>Opens the gallery in its scanning state and returns the token for <see cref="CompleteScreenshotLoad"/>.</summary>
+        public int OpenScreenshotGallery(string gameName)
+        {
+            return Dispatcher.Invoke(() =>
+            {
+                StopGalleryRepeat();
+                galleryReturnFocus = Keyboard.FocusedElement as UIElement;
+
+                var gallery = ViewModel.ScreenshotGallery;
+                gallery.Open(gameName);
+                int token = gallery.BeginLoad();
+                ScreenshotGalleryLayer.FocusList();
+                _logger.Log($"Screenshot gallery opened for {gameName}", "SHOT_GALLERY");
+                return token;
+            });
+        }
+
+        /// <summary>Clears the list again and shows the scanning state (rescan). Returns -1 when the gallery is not open.</summary>
+        public int BeginScreenshotReload()
+        {
+            return Dispatcher.Invoke(() =>
+            {
+                var gallery = ViewModel.ScreenshotGallery;
+                if (!gallery.IsOpen)
+                    return -1;
+
+                StopGalleryRepeat();
+                gallery.CloseViewer();
+                return gallery.BeginLoad();
+            });
+        }
+
+        /// <summary>Hands a finished scan to the gallery. Safe to call from any thread; a stale token is ignored.</summary>
+        public void CompleteScreenshotLoad(int token, ScreenshotReadResult result)
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                var gallery = ViewModel.ScreenshotGallery;
+                if (!gallery.CompleteLoad(token, result))
+                    return;
+
+                ScreenshotGalleryLayer.SelectIndex(0);
+                ScreenshotGalleryLayer.FocusList();
+                _logger.Log($"Screenshot gallery loaded: {gallery.Items.Count} shown of {gallery.TotalCount} (status {result.Status}, scanned {result.Scanned}, fallback {result.UsedFallback})", "SHOT_GALLERY");
+            }));
+        }
+
+        /// <summary>Closes the gallery and returns to the main overlay. Safe to call at any time.</summary>
+        public void CloseScreenshotGallery()
+        {
+            Dispatcher.Invoke(() =>
+            {
+                StopGalleryRepeat();
+                var gallery = ViewModel.ScreenshotGallery;
+                if (!gallery.IsOpen)
+                    return;
+
+                gallery.Close();
+                if (IsVisible)
+                {
+                    var target = galleryReturnFocus;
+                    if (target != null && target.IsVisible && target.IsEnabled) target.Focus();
+                    else ReturnToGameButton.Focus();
+                }
+                galleryReturnFocus = null;
+                _logger.Log("Screenshot gallery closed", "SHOT_GALLERY");
+            });
+        }
+
+        /// <summary>
+        /// Back: closes the full-size viewer first, then the gallery. A controller B press, the Escape key (also seen by the
+        /// plugin's global hook) and the keyboard twin of a B press can all arrive for one press, so calls within a
+        /// few milliseconds of the previous one are ignored; otherwise one press would close both.
+        /// </summary>
+        public void GalleryBack()
+        {
+            Dispatcher.Invoke(() =>
+            {
+                var gallery = ViewModel.ScreenshotGallery;
+                if (!gallery.IsOpen)
+                    return;
+
+                long now = inputClock.ElapsedMilliseconds;
+                if (now - lastGalleryBackMs < GalleryBackGuardMs)
+                    return;
+                lastGalleryBackMs = now;
+
+                StopGalleryRepeat();
+                if (gallery.IsViewerOpen) gallery.CloseViewer();
+                else CloseScreenshotGallery();
+            });
+        }
+
+        private void OpenScreenshotFolder()
+        {
+            try { ButtonActions.OpenCapturesFolder(Settings?.ScreenshotGalleryPath); }
+            catch (Exception ex) { _logger.Log($"Could not open the captures folder: {ex.Message}", "WARNING"); }
+            this.Hide();
+        }
+
+        private void OpenSelectedScreenshot()
+        {
+            var gallery = ViewModel.ScreenshotGallery;
+            if (!gallery.IsOpen || gallery.IsViewerOpen || ScreenshotGalleryLayer.ItemCount == 0)
+                return;
+
+            StopGalleryRepeat();
+            gallery.OpenViewer(Math.Max(0, ScreenshotGalleryLayer.SelectedIndex));
+        }
+
+        /// <summary>
+        /// Controller input while the gallery is open. Called for presses AND releases (releases stop hold-to-repeat).
+        /// Grid: D-pad/stick move (up and down by a row), A opens, LB/RB page, LT/RT first/last, Y rescan, X open folder, B back.
+        /// Viewer: left/right (or LB/RB) previous/next, LT/RT first/last, B back to the grid.
+        /// </summary>
+        public void HandleScreenshotGalleryInput(ControllerInput button, bool pressed)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                var gallery = ViewModel.ScreenshotGallery;
+                if (!gallery.IsOpen)
+                    return;
+
+                lastPadInputMs = inputClock.ElapsedMilliseconds;
+
+                int step;
+                if (TryGetGalleryStep(button, gallery.IsViewerOpen, out step))
+                {
+                    if (pressed)
+                    {
+                        bool keyAlreadyMoved = KeyInputRecent();
+                        heldGalleryButton = button;
+                        heldGalleryStep = step;
+                        if (!keyAlreadyMoved)
+                            MoveGallery(step);
+                        else
+                            _logger.Log($"Ignored controller {button}: duplicate of a key press", "INPUT");
+                        galleryRepeatTimer.Interval = TimeSpan.FromMilliseconds(RepeatInitialDelayMs);
+                        galleryRepeatTimer.Start();
+                    }
+                    else if (heldGalleryButton == button)
+                    {
+                        StopGalleryRepeat();
+                    }
+                    return;
+                }
+
+                if (!pressed)
+                    return;
+
+                bool viewer = gallery.IsViewerOpen;
+                switch (button)
+                {
+                    case ControllerInput.A:
+                        if (!viewer)
+                        {
+                            if (!KeyInputRecent())
+                                OpenSelectedScreenshot();
+                            else
+                                _logger.Log("Ignored controller A: duplicate of an Enter/Space key press", "INPUT");
+                        }
+                        break;
+                    case ControllerInput.B:
+                        _logger.Log("B pressed - screenshot gallery back", "SHOT_GALLERY");
+                        GalleryBack();
+                        break;
+                    case ControllerInput.Y:
+                        if (!viewer) gallery.RefreshCommand.Execute(null);
+                        break;
+                    case ControllerInput.X:
+                        if (!viewer) gallery.OpenFolderCommand.Execute(null);
+                        break;
+                    case ControllerInput.LeftShoulder:
+                        MoveGallery(viewer ? -1 : -GalleryPageSize());
+                        break;
+                    case ControllerInput.RightShoulder:
+                        MoveGallery(viewer ? 1 : GalleryPageSize());
+                        break;
+                    case ControllerInput.TriggerLeft:
+                        JumpGallery(false);
+                        break;
+                    case ControllerInput.TriggerRight:
+                        JumpGallery(true);
+                        break;
+                }
+            });
+        }
+
+        private static bool TryGetGalleryStep(ControllerInput button, bool inViewer, out int step)
+        {
+            int cols = ScreenshotGalleryViewModel.GridColumns;
+            switch (button)
+            {
+                case ControllerInput.DPadLeft:
+                case ControllerInput.LeftStickLeft:
+                    step = -1; return true;
+                case ControllerInput.DPadRight:
+                case ControllerInput.LeftStickRight:
+                    step = 1; return true;
+                case ControllerInput.DPadUp:
+                case ControllerInput.LeftStickUp:
+                case ControllerInput.RightStickUp:
+                    if (inViewer) { step = 0; return false; }
+                    step = -cols; return true;
+                case ControllerInput.DPadDown:
+                case ControllerInput.LeftStickDown:
+                case ControllerInput.RightStickDown:
+                    if (inViewer) { step = 0; return false; }
+                    step = cols; return true;
+                default:
+                    step = 0; return false;
+            }
+        }
+
+        private void GalleryRepeatTimer_Tick(object sender, EventArgs e)
+        {
+            var gallery = ViewModel.ScreenshotGallery;
+            if (!gallery.IsOpen || heldGalleryButton == null)
+            {
+                StopGalleryRepeat();
+                return;
+            }
+
+            int interval = gallery.IsViewerOpen
+                ? GalleryViewerRepeatIntervalMs
+                : (Math.Abs(heldGalleryStep) > 1 ? RepeatPageIntervalMs : RepeatItemIntervalMs);
+            galleryRepeatTimer.Interval = TimeSpan.FromMilliseconds(interval);
+
+            // Stops by itself at the first/last capture (also guards against a lost "released" event)
+            if (!MoveGallery(heldGalleryStep))
+                StopGalleryRepeat();
+        }
+
+        private void StopGalleryRepeat()
+        {
+            heldGalleryButton = null;
+            galleryRepeatTimer?.Stop();
+        }
+
+        /// <summary>A "page" is the cards in the visible rows.</summary>
+        private int GalleryPageSize()
+        {
+            return Math.Max(1, ScreenshotGalleryLayer.VisibleRows) * ScreenshotGalleryViewModel.GridColumns;
+        }
+
+        /// <summary>Moves the viewer by <paramref name="step"/> images, or the grid selection by <paramref name="step"/> cards. False at the ends.</summary>
+        private bool MoveGallery(int step)
+        {
+            var gallery = ViewModel.ScreenshotGallery;
+            if (gallery.IsViewerOpen)
+                return gallery.ViewerStep(step);
+
+            int count = ScreenshotGalleryLayer.ItemCount;
+            if (count == 0 || step == 0) return false;
+
+            int cols = ScreenshotGalleryViewModel.GridColumns;
+            int current = ScreenshotGalleryLayer.SelectedIndex;
+            if (current < 0)
+            {
+                ScreenshotGalleryLayer.SelectIndex(0);
+                return true;
+            }
+
+            int next = current + step;
+            if (next >= count)
+            {
+                // Down on the last row stays put; from an earlier row it lands on the very last card
+                if (current / cols == (count - 1) / cols) return false;
+                next = count - 1;
+            }
+            if (next < 0) next = 0;
+            if (next == current) return false;
+
+            ScreenshotGalleryLayer.SelectIndex(next);
+            return true;
+        }
+
+        private void JumpGallery(bool toEnd)
+        {
+            var gallery = ViewModel.ScreenshotGallery;
+            int count = gallery.Items.Count;
+            if (count == 0) return;
+
+            if (gallery.IsViewerOpen)
+                gallery.ViewerStep(toEnd ? count : -count);
+            else
+                ScreenshotGalleryLayer.SelectIndex(toEnd ? count - 1 : 0);
+        }
+
+        /// <summary>Keyboard (and Playnite's keyboard twin of controller input) while the gallery is open.</summary>
+        private void HandleScreenshotGalleryKey(System.Windows.Input.KeyEventArgs e)
+        {
+            var gallery = ViewModel.ScreenshotGallery;
+            bool viewer = gallery.IsViewerOpen;
+            int cols = ScreenshotGalleryViewModel.GridColumns;
+
+            // Holding an arrow in the viewer decodes a full-size image per repeat; slow that down
+            if (viewer && e.IsRepeat)
+            {
+                long now = inputClock.ElapsedMilliseconds;
+                if (now - lastGalleryViewerKeyMs < GalleryViewerKeyRepeatMs)
+                {
+                    e.Handled = true;
+                    return;
+                }
+                lastGalleryViewerKeyMs = now;
+            }
+
+            switch (e.Key)
+            {
+                case Key.Up: if (!viewer) MoveGallery(-cols); break;
+                case Key.Down: if (!viewer) MoveGallery(cols); break;
+                case Key.Left: MoveGallery(-1); break;
+                case Key.Right: MoveGallery(1); break;
+                case Key.PageUp: MoveGallery(viewer ? -1 : -GalleryPageSize()); break;
+                case Key.PageDown: MoveGallery(viewer ? 1 : GalleryPageSize()); break;
+                case Key.Home: JumpGallery(false); break;
+                case Key.End: JumpGallery(true); break;
+                case Key.Enter:
+                case Key.Space:
+                    if (!viewer) OpenSelectedScreenshot();
+                    break;
+                case Key.R:
+                    if (!viewer) gallery.RefreshCommand.Execute(null);
+                    break;
+                case Key.O:
+                    if (!viewer) gallery.OpenFolderCommand.Execute(null);
+                    break;
+                case Key.Back:
+                case Key.Escape:   // also seen by the plugin's global hook; GalleryBack ignores the second call
+                    GalleryBack();
+                    break;
+                default:
+                    return;
+            }
+            e.Handled = true;
         }
 
         #endregion

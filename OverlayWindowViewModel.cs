@@ -209,8 +209,11 @@ namespace PlayniteGameOverlay
             }
         }
 
-        /// <summary>The main overlay (buttons etc.) is disabled - and therefore not focusable - while the list or the audio panel is open.</summary>
-        public bool IsMainLayerEnabled => !_isAchievementListOpen && !_isAudioPanelOpen;
+        /// <summary>Data of the in-overlay screenshot gallery (Screenshots Visualizer integration; filled only while it is open).</summary>
+        public ScreenshotGalleryViewModel ScreenshotGallery { get; } = new ScreenshotGalleryViewModel();
+
+        /// <summary>The main overlay (buttons etc.) is disabled - and therefore not focusable - while the list, the audio panel or the screenshot gallery is open.</summary>
+        public bool IsMainLayerEnabled => !_isAchievementListOpen && !_isAudioPanelOpen && !ScreenshotGallery.IsOpen;
 
         // ---- Audio panel (Audio Switcher integration) ----
         private bool _isAudioPanelOpen;
@@ -384,6 +387,13 @@ namespace PlayniteGameOverlay
         public OverlayWindowViewModel(bool designMode = false)
         {
             ShortcutButtons = new ObservableCollection<ShortcutButtonViewModel>();
+
+            // The gallery opening or closing enables or disables the main layer
+            ScreenshotGallery.PropertyChanged += (s, e) =>
+            {
+                if (e.PropertyName == nameof(ScreenshotGalleryViewModel.IsOpen))
+                    OnPropertyChanged(nameof(IsMainLayerEnabled));
+            };
 
             // Initialize commands
             ReturnToGameCommand = new RelayCommand(_ => HideOverlayRequested?.Invoke());

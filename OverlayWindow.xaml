@@ -1210,6 +1210,9 @@
                     </Grid>
                 </Border>
             </Grid>
+
+            <!-- ===== Screenshot gallery layer: Screenshots Visualizer captures, shown on top of everything else ===== -->
+            <local:ScreenshotGalleryView x:Name="ScreenshotGalleryLayer" DataContext="{Binding ScreenshotGallery}"/>
         </Grid>
     </Viewbox>
 </Window>

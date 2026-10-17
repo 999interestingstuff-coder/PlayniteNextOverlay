@@ -94,6 +94,13 @@ namespace PlayniteGameOverlay
                         return;
                     }
 
+                    // Screenshot gallery has its own controls (needs releases too, for hold-to-repeat)
+                    if (overlayWindow.IsScreenshotGalleryOpen)
+                    {
+                        overlayWindow.HandleScreenshotGalleryInput(args.Button, args.State == ControllerInputState.Pressed);
+                        return;
+                    }
+
                     // Audio panel has its own controls (needs releases too, for hold-to-repeat)
                     if (overlayWindow.IsAudioPanelOpen)
                     {
@@ -270,6 +277,9 @@ namespace PlayniteGameOverlay
             window.AchievementListClosed += OnAchievementListClosed;
             window.OverlayHidden += OnOverlayHidden;
             window.AudioPanelOpened += OnAudioPanelOpened;
+            window.ScreenshotGalleryRequested += OnScreenshotGalleryRequested;
+            window.ScreenshotGalleryRefreshRequested += OnScreenshotGalleryRefreshRequested;
+            window.ScreenshotGalleryEnabled = ScreenshotsVisualizerReader.IsInstalled(playniteAPI);
             AttachAudioSwitcher(window);
             window.ExtraGamePidsProvider = () => lastStartedProcessId > 0 ? new List<int> { lastStartedProcessId } : new List<int>();
         }
@@ -382,6 +392,61 @@ namespace PlayniteGameOverlay
         private void OnAchievementListClosed()
         {
             // Going back from the list to the main overlay keeps the game paused; it resumes when the overlay hides.
+        }
+
+        // ---- Screenshot gallery (Screenshots Visualizer) ----
+
+        private void OnScreenshotGalleryRequested()
+        {
+            var game = overlayGame ?? playniteAPI.Database.Games.FirstOrDefault(g => g.IsRunning);
+            if (game == null)
+            {
+                logger.Warn("Screenshot gallery requested but no game is associated with the overlay.");
+                return;
+            }
+
+            logger.Info($"Screenshot gallery opened for {game.Name}");
+            int token = overlayWindow.OpenScreenshotGallery(game.Name);
+
+            // The game is already paused (or not) from when the overlay opened; just show that state in the gallery footer.
+            overlayWindow.SetGamePauseStatus(Settings.SuspendGameInOverlayViews ? gamePauseStatus : null);
+
+            StartScreenshotScan(game, token);
+        }
+
+        private void OnScreenshotGalleryRefreshRequested()
+        {
+            var game = overlayGame ?? playniteAPI.Database.Games.FirstOrDefault(g => g.IsRunning);
+            if (game == null)
+                return;
+
+            int token = overlayWindow.BeginScreenshotReload();
+            if (token < 0)
+                return;
+
+            logger.Info($"Screenshot gallery rescan for {game.Name}");
+            StartScreenshotScan(game, token);
+        }
+
+        /// <summary>Scans the game's screenshot folders and reads the list off the UI thread; the window ignores the result if it was closed or reloaded meanwhile.</summary>
+        private void StartScreenshotScan(Game game, int token)
+        {
+            var api = playniteAPI;
+            var window = overlayWindow;
+            var gameId = game.Id;
+
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                var result = ScreenshotsVisualizerReader.ScanAndRead(api, gameId, true, ScreenshotGalleryViewModel.MaxItems);
+                try
+                {
+                    window.CompleteScreenshotLoad(token, result);
+                }
+                catch (Exception ex)
+                {
+                    logger.Warn($"Could not hand the screenshot list to the overlay: {ex.Message}");
+                }
+            });
         }
 
         // Text shown in the achievement list footer ("Game paused" etc.); null when the game is not being paused.
@@ -553,6 +618,8 @@ namespace PlayniteGameOverlay
             {
                 if (overlayWindow.IsAchievementListOpen)
                     overlayWindow.CloseAchievementList();
+                else if (overlayWindow.IsScreenshotGalleryOpen)
+                    overlayWindow.GalleryBack();   // closes the full-size viewer first, then the gallery
                 else if (overlayWindow.IsAudioPanelOpen)
                     overlayWindow.CloseAudioPanel();
                 else
@@ -581,6 +648,7 @@ namespace PlayniteGameOverlay
         {
             suspender.ResumeAll("game stopped");
             overlayWindow.CloseAchievementList();
+            overlayWindow.CloseScreenshotGallery();
             overlayWindow.UpdateGameOverlay(null);
             GameOverlayData = null;
             overlayGameProcessId = -1;

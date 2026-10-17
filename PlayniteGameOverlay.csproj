@@ -61,6 +61,11 @@
     <Compile Include="PlayniteGameOverlay.cs" />
     <Compile Include="PlayniteAchievementsReader.cs" />
     <Compile Include="AchievementListViewModel.cs" />
+    <Compile Include="ScreenshotGalleryView.xaml.cs">
+      <DependentUpon>ScreenshotGalleryView.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ScreenshotGalleryViewModel.cs" />
+    <Compile Include="ScreenshotsVisualizerReader.cs" />
     <Compile Include="GameProcessSuspender.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Battery.xaml.cs">
@@ -75,6 +80,7 @@
     <Page Include="OverlaySettingsView.xaml" />
     <Page Include="OverlayWindow.xaml" />
     <Page Include="Battery.xaml" />
+    <Page Include="ScreenshotGalleryView.xaml" />
   </ItemGroup>
 
   <ItemGroup>
