@@ -152,14 +152,6 @@
                                     <TextBlock Text="Rescan" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Button>
-                            <Button Style="{StaticResource SsvActionButton}" Command="{Binding OpenFolderCommand}" Margin="10,0,0,0">
-                                <StackPanel Orientation="Horizontal">
-                                    <Border Style="{StaticResource SsvHintBadge}">
-                                        <TextBlock Text="X" Style="{StaticResource SsvHintText}"/>
-                                    </Border>
-                                    <TextBlock Text="Open folder" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </Button>
                             <Button Style="{StaticResource SsvActionButton}" Command="{Binding BackCommand}" Margin="10,0,0,0">
                                 <StackPanel Orientation="Horizontal">
                                     <Border Style="{StaticResource SsvHintBadge}">
@@ -271,9 +263,9 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" VerticalAlignment="Center">
                             <TextBlock FontSize="12" Foreground="#FF8A8A8A" TextWrapping="Wrap"
-                                       Text="Controller: D-pad or stick to move (hold to repeat). A opens a capture. LT and RT jump to the ends. Y rescans the folders. X opens the captures folder. B goes back."/>
+                                       Text="Controller: D-pad or stick to move (hold to repeat). A opens a capture. LT and RT jump to the ends. Y rescans the folders. B goes back."/>
                             <TextBlock FontSize="12" Foreground="#FF6A6A6A" TextWrapping="Wrap" Margin="0,2,0,0"
-                                       Text="Keyboard and mouse: arrow keys, Page Up and Page Down, Home and End. Enter opens. R rescans. O opens the folder. Backspace or Esc goes back. Click a card to open it. Use the wheel to scroll."/>
+                                       Text="Keyboard and mouse: arrow keys, Page Up and Page Down, Home and End. Enter opens. R rescans. Backspace or Esc goes back. Click a card to open it. Use the wheel to scroll."/>
                         </StackPanel>
                         <Border Grid.Column="1" Visibility="{Binding HasGamePauseStatus, Converter={StaticResource BoolToVis}}"
                                 Background="#FF2C2C2C" CornerRadius="6" Padding="10,4,10,4" Margin="12,0,0,0" VerticalAlignment="Center">

@@ -72,7 +72,6 @@ namespace PlayniteGameOverlay
             ViewModel.AudioTabChanged += FocusFirstAudioRow;
             ViewModel.ScreenshotGallery.CloseRequested += CloseScreenshotGallery;
             ViewModel.ScreenshotGallery.RefreshRequested += () => ScreenshotGalleryRefreshRequested?.Invoke();
-            ViewModel.ScreenshotGallery.OpenFolderRequested += OpenScreenshotFolder;
 
             // Hold-to-repeat for D-pad / stick moves in the screenshot gallery
             galleryRepeatTimer = new DispatcherTimer(DispatcherPriority.Input);
@@ -1186,13 +1185,6 @@ namespace PlayniteGameOverlay
             });
         }
 
-        private void OpenScreenshotFolder()
-        {
-            try { ButtonActions.OpenCapturesFolder(Settings?.ScreenshotGalleryPath); }
-            catch (Exception ex) { _logger.Log($"Could not open the captures folder: {ex.Message}", "WARNING"); }
-            this.Hide();
-        }
-
         private void OpenSelectedScreenshot()
         {
             var gallery = ViewModel.ScreenshotGallery;
@@ -1205,7 +1197,7 @@ namespace PlayniteGameOverlay
 
         /// <summary>
         /// Controller input while the gallery is open. Called for presses AND releases (releases stop hold-to-repeat).
-        /// Grid: D-pad/stick move (up and down by a row), A opens, LB/RB page, LT/RT first/last, Y rescan, X open folder, B back.
+        /// Grid: D-pad/stick move (up and down by a row), A opens, LB/RB page, LT/RT first/last, Y rescan, B back.
         /// Viewer: left/right (or LB/RB) previous/next, LT/RT first/last, B back to the grid.
         /// </summary>
         public void HandleScreenshotGalleryInput(ControllerInput button, bool pressed)
@@ -1261,9 +1253,6 @@ namespace PlayniteGameOverlay
                         break;
                     case ControllerInput.Y:
                         if (!viewer) gallery.RefreshCommand.Execute(null);
-                        break;
-                    case ControllerInput.X:
-                        if (!viewer) gallery.OpenFolderCommand.Execute(null);
                         break;
                     case ControllerInput.LeftShoulder:
                         MoveGallery(viewer ? -1 : -GalleryPageSize());
@@ -1417,9 +1406,6 @@ namespace PlayniteGameOverlay
                     break;
                 case Key.R:
                     if (!viewer) gallery.RefreshCommand.Execute(null);
-                    break;
-                case Key.O:
-                    if (!viewer) gallery.OpenFolderCommand.Execute(null);
                     break;
                 case Key.Back:
                 case Key.Escape:   // also seen by the plugin's global hook; GalleryBack ignores the second call

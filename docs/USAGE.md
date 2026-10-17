@@ -68,7 +68,7 @@ A button is shown only when its shortcut box is not empty. When you press it, th
 
 | Button | NVIDIA App keys | Value in settings |
 | --- | --- | --- |
-| Screenshot | Alt+F1 | `%{F1}` |
+| Capture (screenshot) | Alt+F1 | `%{F1}` |
 | Record | Alt+F9 | `%{F9}` |
 | Recent clip (save Instant Replay) | Alt+F10 | `%{F10}` |
 | Instant replay on or off | Alt+Shift+F10 | `+%{F10}` |
@@ -82,7 +82,7 @@ Steam's default screenshot key is F12, which is `{F12}` in the shortcut box. Ste
 
 ### Out-of-the-box shortcuts
 
-A fresh install uses the NVIDIA App keys above for all five buttons: Screenshot, Record, Recent clip, Instant replay and Performance. If you use the NVIDIA App, there is nothing to set up. With another recorder, replace them with its keys.
+A fresh install uses the NVIDIA App keys above for all five buttons: Capture, Record, Recent clip, Instant replay and Performance. If you use the NVIDIA App, there is nothing to set up. With another recorder, replace them with its keys.
 
 Stream starts empty, so its button stays hidden until you give it a shortcut. To hide any other button, clear its box.
 

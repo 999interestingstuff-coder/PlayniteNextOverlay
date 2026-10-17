@@ -8,7 +8,8 @@
 - New Audio button under Show Playnite, with an in-overlay Audio panel (Windows volume, game volume, mute, output device, and a Media tab for other apps). It needs the Audio Switcher extension; without it the button is hidden.
 - Fixed the D-pad and stick skipping a row in the achievement list and the Audio panel (the controller press was also arriving as an arrow key).
 - On the main overlay, A and B now act when you let go of the button, so the game no longer receives the A or B press that closed the overlay.
-- The Captures button now opens an in-overlay screenshot gallery (card grid and full-size viewer, controller, keyboard and mouse) when the Screenshots Visualizer extension is installed. Y or R rescans the game's screenshot folders, X or O opens the captures folder. Without Screenshots Visualizer the button opens the folder as before.
+- The Captures button is now the Screenshots button, with a picture icon. When the Screenshots Visualizer extension is installed it opens an in-overlay screenshot gallery (card grid and full-size viewer, controller, keyboard and mouse); Y or R rescans the game's screenshot folders. Without Screenshots Visualizer it opens the captures folder as before.
+- The Screenshot button is now called Capture.
 
 ## 1.0.0 - 2026-10-09
 

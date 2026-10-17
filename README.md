@@ -27,13 +27,13 @@ Until now, an overlay could show you the last achievement you unlocked and a cou
 
 ![Shortcut bar](docs/screenshots/buttons-screenshot.webp)
 
-Screenshot, record, save a recent clip, instant replay and a performance overlay are each one button away. Each button sends a keyboard shortcut to the recorder you already use, so nothing new runs in the background.
+Capture (a screenshot), record, save a recent clip, instant replay and a performance overlay are each one button away. Each button sends a keyboard shortcut to the recorder you already use, so nothing new runs in the background.
 
 I use it with the **NVIDIA App**, and these are the NVIDIA App's standard shortcuts in the format the settings expect:
 
 | Button | NVIDIA App keys | Value in settings |
 | --- | --- | --- |
-| Screenshot | Alt+F1 | `%{F1}` |
+| Capture (screenshot) | Alt+F1 | `%{F1}` |
 | Record | Alt+F9 | `%{F9}` |
 | Recent clip (save Instant Replay) | Alt+F10 | `%{F10}` |
 | Instant replay on or off | Alt+Shift+F10 | `+%{F10}` |
@@ -45,7 +45,7 @@ Steam and any other recorder with keyboard shortcuts work too. The [full guide](
 
 ![Instant replay button](docs/screenshots/buttons-instant-replay.webp)
 
-Next to the capture buttons you also get a button that opens your captures folder, one that opens your browser, and the game's cover, total playtime, session time and battery level.
+Next to the capture buttons you also get a Screenshots button that opens a gallery of the game's screenshots (it needs the Screenshots Visualizer extension; without it the button opens your captures folder), one that opens your browser, and the game's cover, total playtime, session time and battery level.
 
 ## Installation
 

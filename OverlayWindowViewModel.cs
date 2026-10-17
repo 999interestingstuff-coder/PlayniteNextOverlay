@@ -552,7 +552,7 @@ namespace PlayniteGameOverlay
             {
                 ShortcutButtons.Add(new ShortcutButtonViewModel
                 {
-                    Title = "Screenshot",
+                    Title = "Capture",
                     IconPath = "/PlayniteNextOverlay;component/assets/camera.png",
                     ShortcutCommand = settings.ScreenshotShortcut,
                     Type = ShortcutType.KbdShortcut,
@@ -619,8 +619,8 @@ namespace PlayniteGameOverlay
             {
                 ShortcutButtons.Add(new ShortcutButtonViewModel
                 {
-                    Title = "Captures",
-                    IconPath = "/PlayniteNextOverlay;component/assets/screenshot.png",
+                    Title = "Screenshots",
+                    IconPath = "/PlayniteNextOverlay;component/assets/screenshots.png",
                     ShortcutCommand = settings.ScreenshotGalleryPath,
                     Type = ShortcutType.Gallery,
                 });

@@ -119,7 +119,7 @@
 
             <!-- Screenshot toggle -->
             <CheckBox IsChecked="{Binding ShowScreenshot}" 
-          Content="Show the Screenshot button" 
+          Content="Show the Capture button" 
           Margin="0,10,0,5"/>
             <Grid Margin="20,0,0,15">
                 <Grid.ColumnDefinitions>
@@ -197,7 +197,7 @@
 
             <!-- Screenshot gallery toggle -->
             <CheckBox IsChecked="{Binding ShowScreenshotGallery}" 
-          Content="Show the Captures button" 
+          Content="Show the Screenshots button" 
           Margin="0,10,0,5"/>
             <Grid Margin="20,0,0,15">
                 <Grid.ColumnDefinitions>

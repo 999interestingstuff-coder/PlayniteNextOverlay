@@ -163,21 +163,18 @@ namespace PlayniteGameOverlay
                 else CloseRequested?.Invoke();
             });
             RefreshCommand = new RelayCommand(_ => RefreshRequested?.Invoke());
-            OpenFolderCommand = new RelayCommand(_ => OpenFolderRequested?.Invoke());
             ViewerPreviousCommand = new RelayCommand(_ => ViewerStep(-1));
             ViewerNextCommand = new RelayCommand(_ => ViewerStep(1));
         }
 
         public ICommand BackCommand { get; }
         public ICommand RefreshCommand { get; }
-        public ICommand OpenFolderCommand { get; }
         public ICommand ViewerPreviousCommand { get; }
         public ICommand ViewerNextCommand { get; }
 
         /// <summary>Back pressed while the grid (not the viewer) is showing: the window closes the gallery.</summary>
         public event Action CloseRequested;
         public event Action RefreshRequested;
-        public event Action OpenFolderRequested;
         /// <summary>Raised when the viewer moves to another image, so the grid selection can follow.</summary>
         public event Action<int> ViewerIndexChanged;
 
