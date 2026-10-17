@@ -493,6 +493,59 @@
                 </Grid>
             </Border>
 
+            <!-- Solaris profile (avatar, background, username, title), under the Playtime panel. Shown only while the game was
+                 started through the Solaris fullscreen theme and Solaris is the active theme; follows Solaris > Theme Options. -->
+            <Grid x:Name="SolarisProfileCard" Width="375" Height="112" VerticalAlignment="Top" HorizontalAlignment="Right"
+                  Margin="0,749,36,0" IsHitTestVisible="False" Focusable="False"
+                  Visibility="{Binding SolarisProfile.IsVisible, Converter={StaticResource BoolToVis}}">
+                <Border Background="#FF242424" CornerRadius="10" BorderBrush="#80808080" BorderThickness="1,1,1,1"/>
+
+                <!-- Profile background: fades in from the left, like in Solaris -->
+                <Border Width="373" Height="110" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Border.Clip>
+                        <RectangleGeometry Rect="0,0,373,110" RadiusX="9" RadiusY="9"/>
+                    </Border.Clip>
+                    <Image Source="{Binding SolarisProfile.Background}" Stretch="UniformToFill" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Image.OpacityMask>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                <GradientStop Color="#00000000" Offset="0"/>
+                                <GradientStop Color="#E6000000" Offset="0.85"/>
+                            </LinearGradientBrush>
+                        </Image.OpacityMask>
+                    </Image>
+                </Border>
+
+                <Grid Margin="18,0,18,0" VerticalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Avatar -->
+                    <Grid Grid.Column="0" Width="76" Height="76" VerticalAlignment="Center">
+                        <Ellipse Width="76" Height="76" Fill="#1AFFFFFF"/>
+                        <Image Source="{Binding SolarisProfile.Avatar}" Width="72" Height="72" Stretch="UniformToFill"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="Fant">
+                            <Image.Clip>
+                                <EllipseGeometry Center="36,36" RadiusX="36" RadiusY="36"/>
+                            </Image.Clip>
+                        </Image>
+                    </Grid>
+
+                    <!-- Username and profile title -->
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="14,0,0,0">
+                        <TextBlock Text="{Binding SolarisProfile.UserName}" Foreground="White" FontSize="24" FontWeight="Bold"
+                                   TextTrimming="CharacterEllipsis" MaxWidth="245" HorizontalAlignment="Left"
+                                   Visibility="{Binding SolarisProfile.ShowUserName, Converter={StaticResource BoolToVis}}"/>
+                        <Border Background="#66808080" CornerRadius="5" Padding="7,1,7,2" Margin="0,3,0,0" HorizontalAlignment="Left"
+                                Visibility="{Binding SolarisProfile.ShowTitle, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="{Binding SolarisProfile.Title}" Foreground="#FFE8E8E8" FontSize="13"
+                                       TextTrimming="CharacterEllipsis" MaxWidth="230"/>
+                        </Border>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+
             <!-- Achievement Panel with visibility binding -->
             <Border x:Name="AchFade1" Background="#FF121212" CornerRadius="9" Padding="20,16,20,16" 
                     Width="352" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="52,608,0,0" 

@@ -109,6 +109,14 @@
                    Margin="0,0,0,20"
                    Foreground="#888888"/>
 
+            <CheckBox IsChecked="{Binding ShowSolarisProfile}"
+                  Content="Show the Solaris profile under the playtime"
+                  Margin="0,0,0,5"/>
+            <TextBlock Text="Shows your Solaris avatar, profile background, username and profile title under the playtime panel. It only appears when the game was started through the Solaris fullscreen theme and Solaris is the active theme (needs the Theme Options extension), and it follows what you choose in Solaris under Theme Options."
+                   TextWrapping="Wrap"
+                   Margin="0,0,0,20"
+                   Foreground="#888888"/>
+
             <TextBlock Text="Buttons" FontSize="18" />
             <TextBlock TextWrapping="Wrap" Margin="0,0,0,15" Foreground="#888888">
                 Shortcuts use SendKeys syntax: ^ is Ctrl, + is Shift, and % is Alt. Add {WIN} to hold the Windows key, which SendKeys cannot send on its own.

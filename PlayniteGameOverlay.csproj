@@ -66,6 +66,7 @@
     </Compile>
     <Compile Include="ScreenshotGalleryViewModel.cs" />
     <Compile Include="ScreenshotsVisualizerReader.cs" />
+    <Compile Include="SolarisProfile.cs" />
     <Compile Include="GameProcessSuspender.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Battery.xaml.cs">

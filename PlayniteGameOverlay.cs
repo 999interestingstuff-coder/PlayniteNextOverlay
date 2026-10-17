@@ -240,6 +240,9 @@ namespace PlayniteGameOverlay
             // Set up show Playnite handler + achievement list events
             WireOverlayWindow(overlayWindow);
 
+            // Solaris profile card: follow Theme Options changes made while a game started through Solaris is running
+            themeOptionsWatcher = new ThemeOptionsWatcher(playniteAPI, RefreshSolarisProfile);
+
             try
             {
                 System.Windows.Application.Current.DispatcherUnhandledException +=
@@ -268,6 +271,9 @@ namespace PlayniteGameOverlay
 
             // Set up show Playnite handler + achievement list events again
             WireOverlayWindow(overlayWindow);
+
+            // The new window starts without the Solaris profile card
+            RefreshSolarisProfile();
         }
 
         private void WireOverlayWindow(OverlayWindow window)
@@ -283,6 +289,66 @@ namespace PlayniteGameOverlay
             AttachAudioSwitcher(window);
             window.ExtraGamePidsProvider = () => lastStartedProcessId > 0 ? new List<int> { lastStartedProcessId } : new List<int>();
         }
+
+        #region Solaris profile card
+
+        // The card under the Playtime panel shows the Solaris profile (avatar, background, username, title). It is drawn only when
+        // the running game was started through the Solaris fullscreen theme AND Solaris is still the active theme, and it follows
+        // what the user picks in Solaris > Theme Options (Theme Options raises a change event; the values are also re-read each
+        // time the overlay opens).
+        private bool gameLaunchedViaSolaris;
+        private ThemeOptionsWatcher themeOptionsWatcher;
+
+        private void RefreshSolarisProfile()
+        {
+            try
+            {
+                var dispatcher = System.Windows.Application.Current?.Dispatcher;
+                if (dispatcher == null)
+                    return;
+                if (!dispatcher.CheckAccess())
+                {
+                    dispatcher.BeginInvoke(new Action(RefreshSolarisProfile));
+                    return;
+                }
+
+                var viewModel = overlayWindow?.ViewModel;
+                if (viewModel == null)
+                    return;
+
+                bool show = Settings.ShowSolarisProfile
+                            && gameLaunchedViaSolaris
+                            && SolarisProfileReader.IsSolarisFullscreenActive(playniteAPI);
+                if (!show)
+                {
+                    viewModel.SolarisProfile.Clear();
+                    return;
+                }
+
+                viewModel.SolarisProfile.Apply(SolarisProfileReader.Read(playniteAPI, logger));
+            }
+            catch (Exception ex)
+            {
+                logger.Warn($"Could not update the Solaris profile card: {ex.Message}");
+            }
+        }
+
+        private void OnGameStartedForSolaris()
+        {
+            gameLaunchedViaSolaris = SolarisProfileReader.IsSolarisFullscreenActive(playniteAPI);
+            if (gameLaunchedViaSolaris)
+                themeOptionsWatcher?.Start();
+            RefreshSolarisProfile();
+        }
+
+        private void OnGameStoppedForSolaris()
+        {
+            gameLaunchedViaSolaris = false;
+            themeOptionsWatcher?.Stop();
+            RefreshSolarisProfile();
+        }
+
+        #endregion
 
         #region Audio Switcher integration
 
@@ -345,6 +411,7 @@ namespace PlayniteGameOverlay
             // Never leave a game frozen
             suspender.ResumeAll("Playnite stopping");
             suspendWatchdog?.Stop();
+            themeOptionsWatcher?.Stop();
 
             // Cleanup resources
             overlayWindow?.Close();
@@ -642,6 +709,9 @@ namespace PlayniteGameOverlay
             {
                 logger.Error($"Error preparing game overlay data: {ex}");
             }
+
+            // Remember whether this game was started through Solaris (decides if the profile card is shown)
+            OnGameStartedForSolaris();
         }
 
         public override void OnGameStopped(OnGameStoppedEventArgs args)
@@ -653,6 +723,7 @@ namespace PlayniteGameOverlay
             GameOverlayData = null;
             overlayGameProcessId = -1;
             lastStartedProcessId = -1;
+            OnGameStoppedForSolaris();
         }
 
         private void ShowGameOverlay(Game game)
@@ -667,6 +738,7 @@ namespace PlayniteGameOverlay
             overlayGameProcessId = FindRunningGameProcess(game, null)?.Id ?? -1;
             var gameOverlayData = CreateGameOverlayData(game, overlayGameProcessId > 0 ? overlayGameProcessId : (int?)null, gameStarted);
             overlayWindow.UpdateGameOverlay(gameOverlayData);
+            RefreshSolarisProfile();   // pick up anything changed in Solaris > Theme Options since the last time
             gamePauseStatus = null;
             overlayWindow.ShowOverlay();
 
@@ -1335,6 +1407,9 @@ namespace PlayniteGameOverlay
         // Overlay views (achievement list now, screenshot gallery later): pause the game while open
         private bool _suspendGameInOverlayViews = true;
 
+        // Solaris profile card under the Playtime panel
+        private bool _showSolarisProfile = true;
+
         // Shortcut and path properties.
         // Defaults are the NVIDIA App's standard keys. They are only used by a fresh install:
         // a saved config keeps its own values, including empty ones.
@@ -1485,6 +1560,16 @@ namespace PlayniteGameOverlay
             set => SetValue(ref _suspendGameInOverlayViews, value);
         }
 
+        /// <summary>
+        /// Show the Solaris profile (avatar, background, username, title) under the Playtime panel. It only ever appears when the
+        /// game was started through the Solaris fullscreen theme and Solaris is the active theme. Default ON.
+        /// </summary>
+        public bool ShowSolarisProfile
+        {
+            get => _showSolarisProfile;
+            set => SetValue(ref _showSolarisProfile, value);
+        }
+
         // Backup values for cancel operation
         private ControllerShortcut _controllerShortcutBackup;
         private CloseBehavior _closeBehaviorBackup;
@@ -1507,6 +1592,7 @@ namespace PlayniteGameOverlay
         private string _screenshotShortcutBackup;
         private string _instantReplayShortcutBackup;
         private bool _suspendGameInOverlayViewsBackup;
+        private bool _showSolarisProfileBackup;
 
         // Parameterless constructor needed for serialization
         public OverlaySettings()
@@ -1608,6 +1694,8 @@ namespace PlayniteGameOverlay
                 // Missing in configs written by <= 0.4.5.2 -> stays at its default (true) from the
                 // parameterless constructor used by the JSON deserializer.
                 SuspendGameInOverlayViews = savedSettings.SuspendGameInOverlayViews;
+                // Same for the Solaris profile card: configs written before it existed keep the default (true).
+                ShowSolarisProfile = savedSettings.ShowSolarisProfile;
             }
         }
 
@@ -1639,6 +1727,7 @@ namespace PlayniteGameOverlay
             _screenshotShortcutBackup = ScreenshotShortcut;
             _instantReplayShortcutBackup = InstantReplayShortcut;
             _suspendGameInOverlayViewsBackup = SuspendGameInOverlayViews;
+            _showSolarisProfileBackup = ShowSolarisProfile;
         }
 
         public void CancelEdit()
@@ -1669,6 +1758,7 @@ namespace PlayniteGameOverlay
             ScreenshotShortcut = _screenshotShortcutBackup;
             InstantReplayShortcut = _instantReplayShortcutBackup;
             SuspendGameInOverlayViews = _suspendGameInOverlayViewsBackup;
+            ShowSolarisProfile = _showSolarisProfileBackup;
         }
 
         public void EndEdit()

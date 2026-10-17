@@ -212,6 +212,9 @@ namespace PlayniteGameOverlay
         /// <summary>Data of the in-overlay screenshot gallery (Screenshots Visualizer integration; filled only while it is open).</summary>
         public ScreenshotGalleryViewModel ScreenshotGallery { get; } = new ScreenshotGalleryViewModel();
 
+        /// <summary>Solaris profile card under the Playtime panel (avatar, background, username, title). Hidden unless the game was started through Solaris.</summary>
+        public SolarisProfileViewModel SolarisProfile { get; } = new SolarisProfileViewModel();
+
         /// <summary>The main overlay (buttons etc.) is disabled - and therefore not focusable - while the list, the audio panel or the screenshot gallery is open.</summary>
         public bool IsMainLayerEnabled => !_isAchievementListOpen && !_isAudioPanelOpen && !ScreenshotGallery.IsOpen;
 

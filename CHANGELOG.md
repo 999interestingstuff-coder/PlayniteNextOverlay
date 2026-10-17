@@ -10,6 +10,7 @@
 - On the main overlay, A and B now act when you let go of the button, so the game no longer receives the A or B press that closed the overlay.
 - The Captures button is now the Screenshots button, with a picture icon. When the Screenshots Visualizer extension is installed it opens an in-overlay screenshot gallery (card grid and full-size viewer, controller, keyboard and mouse); Y or R rescans the game's screenshot folders. Without Screenshots Visualizer it opens the captures folder as before.
 - The Screenshot button is now called Capture.
+- New Solaris profile card under the playtime panel: your Solaris avatar, profile background, username and profile title. It only appears when the game was started through the Solaris fullscreen theme and Solaris is the active theme, and it follows Solaris > Theme Options: both the Solaris pictures and your own custom avatar and background are supported, and the username, title and the "Show username" / "Show profile title" options are respected. It needs the Theme Options extension, which Solaris already requires. It can be turned off in the extension settings ("Show the Solaris profile under the playtime").
 
 ## 1.0.0 - 2026-10-09
 

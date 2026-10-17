@@ -47,6 +47,8 @@ Steam and any other recorder with keyboard shortcuts work too. The [full guide](
 
 Next to the capture buttons you also get a Screenshots button that opens a gallery of the game's screenshots (it needs the Screenshots Visualizer extension; without it the button opens your captures folder), one that opens your browser, and the game's cover, total playtime, session time and battery level.
 
+If you play through the Solaris fullscreen theme, a profile card under the playtime shows your Solaris avatar, profile background, username and profile title (the Solaris pictures or your own custom ones), and it updates when you change them in Solaris under Theme Options. It only appears for games started through Solaris while Solaris is the active theme, and can be turned off in the extension settings.
+
 ## Installation
 
 1. Download `PlayniteNextOverlay_1.0.0.pext` from the [Releases](https://github.com/aleksejsgx/PlayniteNextOverlay/releases) page.
