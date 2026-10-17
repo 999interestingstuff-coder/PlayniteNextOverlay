@@ -359,12 +359,14 @@ namespace PlayniteGameOverlay
         {
             if (ViewModel.IsAchievementListOpen)
             {
+                if (IsKeyTwinOfPadInput(e)) return;
                 HandleAchievementListKey(e);
                 return;
             }
 
             if (ViewModel.IsAudioPanelOpen)
             {
+                if (IsKeyTwinOfPadInput(e)) return;
                 HandleAudioPanelKey(e);
                 return;
             }
@@ -495,6 +497,64 @@ namespace PlayniteGameOverlay
             });
         }
 
+        #region Duplicate input guard
+
+        // Playnite (fullscreen mode especially) also turns controller input into keyboard events (arrows, Enter, ...).
+        // The achievement list and the audio panel listen to BOTH the controller events and the key events, so one
+        // D-pad press used to move two rows and A could fire twice. Whichever arrives first is handled; the second
+        // one, if it follows within a few milliseconds, is ignored.
+        private readonly Stopwatch inputClock = Stopwatch.StartNew();
+        private long lastPadInputMs = -100000;
+        private long lastKeyInputMs = -100000;
+        private const int DuplicateInputWindowMs = 180;
+
+        private bool PadInputRecent()
+        {
+            return inputClock.ElapsedMilliseconds - lastPadInputMs < DuplicateInputWindowMs
+                   || heldListButton != null || heldAudioButton != null;
+        }
+
+        private bool KeyInputRecent()
+        {
+            return inputClock.ElapsedMilliseconds - lastKeyInputMs < DuplicateInputWindowMs;
+        }
+
+        private static bool IsNavigationOrActivateKey(Key key)
+        {
+            switch (key)
+            {
+                case Key.Up: case Key.Down: case Key.Left: case Key.Right:
+                case Key.PageUp: case Key.PageDown: case Key.Home: case Key.End:
+                case Key.Tab: case Key.Enter: case Key.Space:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>
+        /// For a key event in one of the panels: true when it is just the keyboard twin of a controller press that was
+        /// already handled (the event is then marked handled). Otherwise records it, so a controller event that follows
+        /// right after is ignored instead.
+        /// </summary>
+        private bool IsKeyTwinOfPadInput(System.Windows.Input.KeyEventArgs e)
+        {
+            if (!IsNavigationOrActivateKey(e.Key))
+                return false;
+
+            if (PadInputRecent())
+            {
+                e.Handled = true;
+                _logger.Log($"Ignored key {e.Key}: duplicate of a controller press", "INPUT");
+                return true;
+            }
+
+            lastKeyInputMs = inputClock.ElapsedMilliseconds;
+            return false;
+        }
+
+        #endregion
+
         #region Achievement list view
 
         // Event raised when the user activates the achievement panel (plugin loads data and calls OpenAchievementList)
@@ -572,14 +632,20 @@ namespace PlayniteGameOverlay
                 if (!ViewModel.IsAchievementListOpen)
                     return;
 
+                lastPadInputMs = inputClock.ElapsedMilliseconds;
+
                 int step;
                 if (TryGetNavStep(button, out step))
                 {
                     if (pressed)
                     {
+                        bool keyAlreadyMoved = KeyInputRecent();
                         heldListButton = button;
                         heldListStep = step;
-                        MoveListSelection(step);
+                        if (!keyAlreadyMoved)
+                            MoveListSelection(step);
+                        else
+                            _logger.Log($"Ignored controller {button}: duplicate of a key press", "INPUT");
                         listRepeatTimer.Interval = TimeSpan.FromMilliseconds(RepeatInitialDelayMs);
                         listRepeatTimer.Start();
                     }
@@ -885,6 +951,8 @@ namespace PlayniteGameOverlay
                 if (!ViewModel.IsAudioPanelOpen)
                     return;
 
+                lastPadInputMs = inputClock.ElapsedMilliseconds;
+
                 Action action = null;
                 switch (button)
                 {
@@ -906,7 +974,10 @@ namespace PlayniteGameOverlay
                 {
                     if (pressed)
                     {
-                        action();
+                        if (!KeyInputRecent())
+                            action();
+                        else
+                            _logger.Log($"Ignored controller {button}: duplicate of a key press", "INPUT");
                         heldAudioAction = action;
                         heldAudioButton = button;
                         audioRepeatTimer.Interval = TimeSpan.FromMilliseconds(AudioRepeatInitialDelayMs);
@@ -925,7 +996,10 @@ namespace PlayniteGameOverlay
                 switch (button)
                 {
                     case ControllerInput.A:
-                        ClickFocusedElement();
+                        if (!KeyInputRecent())
+                            ClickFocusedElement();
+                        else
+                            _logger.Log("Ignored controller A: duplicate of an Enter/Space key press", "INPUT");
                         break;
                     case ControllerInput.B:
                         _logger.Log("B pressed - closing audio panel", "AUDIO");

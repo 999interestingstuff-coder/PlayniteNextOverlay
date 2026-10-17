@@ -28,6 +28,8 @@ namespace PlayniteGameOverlay
         private GlobalKeyboardHook keyboardHook;
 
         private ControllerState controllerState = new ControllerState();
+        private bool pendingOverlayA;   // A went down on the main overlay; the action runs when it is released
+        private bool pendingOverlayB;
 
         public override Guid Id { get; } = Guid.Parse("fc70f846-3640-46f0-9f86-5f0b991ca4aa");
 
@@ -99,6 +101,36 @@ namespace PlayniteGameOverlay
                         return;
                     }
 
+                    // A and B act when the button is RELEASED, not when it goes down. "Return to Game" hides the overlay and
+                    // resumes the game; if that happened on the press, the game would resume with the button still held
+                    // and receive that A / B press itself.
+                    if (args.Button == ControllerInput.A || args.Button == ControllerInput.B)
+                    {
+                        bool isA = args.Button == ControllerInput.A;
+                        if (args.State == ControllerInputState.Pressed)
+                        {
+                            if (isA) pendingOverlayA = true; else pendingOverlayB = true;
+                            return;
+                        }
+
+                        bool wasPending = isA ? pendingOverlayA : pendingOverlayB;
+                        if (isA) pendingOverlayA = false; else pendingOverlayB = false;
+                        if (!wasPending)
+                            return;
+
+                        if (isA)
+                        {
+                            log("Button A released - clicking focused element", "SDL_NAV");
+                            overlayWindow.ClickFocusedElement();
+                        }
+                        else
+                        {
+                            log("Button B released - Hiding overlay", "SDL_NAV");
+                            overlayWindow.Hide();
+                        }
+                        return;
+                    }
+
                     // ignore releases
                     if (mostRecentPress == null)
                         return;
@@ -125,18 +157,14 @@ namespace PlayniteGameOverlay
                             log("Navigating RIGHT", "SDL_NAV");
                             overlayWindow.FocusRight();
                             break;
-                        case ControllerInput.A:
-                            log("Button A pressed - clicking focused element", "SDL_NAV");
-                            overlayWindow.ClickFocusedElement();
-                            break;
-                        case ControllerInput.B:
-                            log("Button B pressed - Hiding overlay", "SDL_NAV");
-                            overlayWindow.Hide();
-                            break;
                     }
                 }
                 else
                 {
+                    // Overlay not in front: forget a half-finished A/B press from before it was hidden
+                    pendingOverlayA = false;
+                    pendingOverlayB = false;
+
                     log($"Background Listener Recieved {args.State.ToString()}: {args.Button.ToString()}", "SDL_INPUT");
                     // We only want to process pressed events, not repeated or released
                     if (mostRecentPress == null)
@@ -293,6 +321,8 @@ namespace PlayniteGameOverlay
         // The game is paused for as long as the overlay is on screen, and resumed as soon as it is hidden.
         private void OnOverlayHidden()
         {
+            pendingOverlayA = false;
+            pendingOverlayB = false;
             gamePauseStatus = null;
             suspender.ResumeAll("overlay hidden");
             suspendWatchdog?.Stop();
