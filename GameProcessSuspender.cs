@@ -15,8 +15,10 @@ namespace PlayniteGameOverlay
     ///
     /// Safety rules:
     ///  - never touches Playnite itself, processes in another session (services), processes whose image
-    ///    lives under the Windows directory or Playnite's install directory, or a deny-list of shell /
-    ///    system / launcher / overlay processes (explorer, dwm, csrss, Steam, Discord, OBS, ...);
+    ///    lives under the Windows directory or is one of Playnite's own files, or a deny-list of shell /
+    ///    system / launcher / overlay processes (explorer, dwm, csrss, Steam, Discord, OBS, ...).
+    ///    Only Playnite's OWN files are protected, not the whole Playnite folder: a portable install keeps
+    ///    games and emulators inside it, and those must still be pausable;
     ///  - a process whose image path cannot be read is skipped (no blind suspends);
     ///  - every process suspended here is remembered together with an open handle (so a recycled PID
     ///    can never be resumed by mistake) and resumed exactly once by <see cref="ResumeAll"/>;
@@ -62,6 +64,16 @@ namespace PlayniteGameOverlay
 
         /// <summary>Products that are never suspended, matched on the executable's ProductName (browser and its WebView2 runtime).</summary>
         private static readonly string[] DeniedProductPrefixes = { "Microsoft Edge" };
+
+        /// <summary>
+        /// Subfolders of the Playnite install folder that belong to Playnite (extensions, themes, toolbox, updater...).
+        /// Executables in these folders, and directly in the Playnite folder itself, are never suspended. Any other
+        /// folder under Playnite (for example the games or emulators of a portable install) is fair game.
+        /// </summary>
+        private static readonly string[] PlayniteOwnedFolders =
+        {
+            "Extensions", "ExtensionsData", "Themes", "Localization", "Toolbox", "Update",
+        };
 
         public GameProcessSuspender(ILogger logger)
         {
@@ -223,7 +235,7 @@ namespace PlayniteGameOverlay
 
             var windowsDir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
             if (IsUnderDirectory(path, windowsDir)) { why = "executable is under the Windows directory"; return false; }
-            if (!string.IsNullOrEmpty(playniteDir) && IsUnderDirectory(path, playniteDir)) { why = "executable is under the Playnite directory"; return false; }
+            if (!string.IsNullOrEmpty(playniteDir) && IsPlayniteOwnFile(path, playniteDir)) { why = "executable is one of Playnite's own files"; return false; }
 
             string product = null;
             try { product = FileVersionInfo.GetVersionInfo(path).ProductName; } catch { }
@@ -255,6 +267,39 @@ namespace PlayniteGameOverlay
             finally
             {
                 if (h != IntPtr.Zero) CloseHandle(h);
+            }
+        }
+
+        /// <summary>
+        /// True if the executable is one of Playnite's own files: it sits directly in the Playnite folder, or in one of
+        /// the folders Playnite owns (extensions, themes, toolbox, updater...). Games and emulators that a portable
+        /// install keeps in other subfolders of the Playnite folder are NOT Playnite's own files.
+        /// When the path cannot be analysed it is treated as Playnite's own (never suspend on doubt).
+        /// </summary>
+        public static bool IsPlayniteOwnFile(string path, string playniteDir)
+        {
+            if (string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(playniteDir)) return false;
+            if (!IsUnderDirectory(path, playniteDir)) return false;
+
+            try
+            {
+                var separators = new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar };
+                var root = Path.GetFullPath(playniteDir).TrimEnd(separators);
+                var fullPath = Path.GetFullPath(path);
+
+                // Executable directly in the Playnite folder (Playnite.DesktopApp.exe, CefSharp.BrowserSubprocess.exe, ...)
+                var fileDir = (Path.GetDirectoryName(fullPath) ?? string.Empty).TrimEnd(separators);
+                if (string.Equals(fileDir, root, StringComparison.OrdinalIgnoreCase))
+                    return true;
+
+                // Executable inside a folder that belongs to Playnite
+                var relative = fullPath.Substring(root.Length).TrimStart(separators);
+                var firstFolder = relative.Split(separators)[0];
+                return PlayniteOwnedFolders.Any(f => string.Equals(f, firstFolder, StringComparison.OrdinalIgnoreCase));
+            }
+            catch
+            {
+                return true;
             }
         }
 
