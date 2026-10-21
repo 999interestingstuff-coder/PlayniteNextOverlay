@@ -235,14 +235,38 @@
         </Style>
     </Window.Resources>
 
+    <Grid>
+    <!-- Window-wide dim. The 16:9 canvas below is letterboxed (Viewbox) when the display is not 16:9, e.g. a Moonlight/Apollo
+         stream, and anything it draws stops at the canvas edge. This rectangle fills the whole window instead, so the entire
+         screen is darkened. Its color matches the combined dim of whichever layer is on top, so no box shows at the canvas edge. -->
+    <Rectangle x:Name="WindowDim">
+        <Rectangle.Style>
+            <Style TargetType="Rectangle">
+                <Setter Property="Fill" Value="#CC000000"/>
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsAchievementListOpen}" Value="True">
+                        <Setter Property="Fill" Value="#F6000000"/>
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding IsAudioPanelOpen}" Value="True">
+                        <Setter Property="Fill" Value="#F6000000"/>
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding ScreenshotGallery.IsOpen}" Value="True">
+                        <Setter Property="Fill" Value="#F6000000"/>
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding ScreenshotGallery.IsViewerOpen}" Value="True">
+                        <Setter Property="Fill" Value="#FF000000"/>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Rectangle.Style>
+    </Rectangle>
     <Viewbox Stretch="Uniform">
         <!-- Set a container with fixed aspect ratio -->
         <Grid x:Name="OverlayRoot" Width="1600" Height="900">
             <!-- Main overlay layer (0.4.5.3: wrapped so it can be disabled = not focusable while the achievement list is open;
                  children intentionally not re-indented to keep the diff small) -->
             <Grid x:Name="MainLayer" IsEnabled="{Binding IsMainLayerEnabled}">
-            <!-- Semi-transparent full-screen background -->
-            <Rectangle Fill="#CC000000" Width="Auto" Height="Auto" />
+            <!-- The semi-transparent background now lives in WindowDim above, outside the Viewbox, so it covers the whole window -->
 
             <!-- Left side buttons container -->
             <Border Background="#FF242424" CornerRadius="10" Padding="20" 
@@ -1269,4 +1293,5 @@
                  which breaks the generated field for a named custom control. -->
         </Grid>
     </Viewbox>
+    </Grid>
 </Window>
